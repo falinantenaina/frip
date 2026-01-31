@@ -1,7 +1,6 @@
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
-import path from "path";
 import { connectDB } from "./config/database.js";
 import { errorHandler } from "./middlewares/error.middleware.js";
 
@@ -22,12 +21,19 @@ import rapportRoutes from "./routes/rapport.route.js";
 import venteRoutes from "./routes/vente.route.js";
 import versementRoutes from "./routes/versement.route.js";
 
-const __dirname = path.resolve();
-
 const app = express();
 
 // Middleware
-app.use(cors());
+pp.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "http://localhost:4173",
+      "https://livefrip.vercel.app",
+    ],
+    credentials: true,
+  }),
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -51,17 +57,6 @@ app.get("/health", (req, res) => {
     version: "1.0.0",
   });
 });
-
-if (process.env.NODE_ENV === "production") {
-  const frontendPath = path.join(__dirname, "../frontend/dist");
-
-  console.log(frontendPath);
-  app.use(express.static(frontendPath));
-
-  app.get("/{*any}", (req, res) => {
-    res.sendFile(path.join(frontendPath, "index.html"));
-  });
-}
 
 // Gestionnaire d'erreurs
 app.use(errorHandler);
