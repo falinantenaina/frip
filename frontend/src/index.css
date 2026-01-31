@@ -19,7 +19,7 @@
 }
 
 body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   background: var(--light-color);
   color: var(--dark-color);
   line-height: 1.6;
@@ -509,8 +509,9 @@ body {
 /* Responsive */
 @media (max-width: 768px) {
   .main-content {
-    margin-left: 0;
+    margin-left: 60px;
     padding: 15px;
+    padding-left: 5px;
   }
 
   .page-header {

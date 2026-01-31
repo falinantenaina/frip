@@ -1,3 +1,7 @@
+/* ============================================
+   SIDEBAR - Version Responsive Améliorée
+   ============================================ */
+
 .sidebar {
   width: var(--sidebar-width);
   background: white;
@@ -9,6 +13,7 @@
   display: flex;
   flex-direction: column;
   z-index: 100;
+  transition: all 0.3s ease;
 }
 
 .logo {
@@ -18,6 +23,12 @@
   padding: 0 20px 30px;
   border-bottom: 1px solid var(--border-color);
   margin-bottom: 20px;
+}
+
+.logo-img {
+  display: block;
+  width: 40px;
+  height: 40px;
 }
 
 .logo-icon {
@@ -61,6 +72,7 @@
 
 .nav-item svg {
   font-size: 18px;
+  min-width: 18px;
 }
 
 .sidebar-footer {
@@ -86,10 +98,12 @@
   justify-content: center;
   font-size: 18px;
   font-weight: 600;
+  flex-shrink: 0;
 }
 
 .user-details {
   flex: 1;
+  min-width: 0;
 }
 
 .user-name {
@@ -97,6 +111,9 @@
   color: var(--dark-color);
   font-size: 14px;
   margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .user-role {
@@ -127,19 +144,315 @@
   color: white;
 }
 
+/* ============================================
+   SIDEBAR TOGGLE BUTTON (Mobile)
+   ============================================ */
+.sidebar-toggle {
+  display: none;
+  position: fixed;
+  top: 15px;
+  left: 15px;
+  z-index: 1001;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  padding: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: var(--shadow-lg);
+  transition: all 0.3s;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar-toggle:hover {
+  background: #1d4ed8;
+  transform: scale(1.05);
+}
+
+.sidebar-toggle svg {
+  font-size: 20px;
+}
+
+/* Overlay pour fermer la sidebar (mobile) */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 99;
+  animation: fadeIn 0.3s;
+}
+
+/* ============================================
+   RESPONSIVE - MOBILE
+   ============================================ */
 @media (max-width: 768px) {
-  .sidebar {
-    width: 70px;
+  /* Afficher le bouton toggle */
+  .sidebar-toggle {
+    display: none;
+    top: 80px;
+    left: 5px;
   }
 
-  .logo h2,
-  .nav-item span,
-  .user-details,
+  /* Sidebar compacte par défaut */
+  .sidebar {
+    width: var(--sidebar-width-mobile);
+    transform: translateX(0);
+  }
+
+  /* Logo - Icône seulement */
+  .logo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0 10px 20px;
+    gap: 5px;
+  }
+
+  .logo-img {
+    display: block;
+    width: 40px;
+    height: 40px;
+  }
+
+  .logo h2 {
+    display: none;
+  }
+
+  .logo-icon {
+    font-size: 28px;
+  }
+
+  /* Navigation - Icônes + petit texte */
+  .nav-item {
+    flex-direction: column;
+    padding: 12px 5px;
+    gap: 4px;
+    font-size: 10px;
+    text-align: center;
+  }
+
+  .nav-item svg {
+    font-size: 20px;
+  }
+
+  .nav-item span {
+    font-size: 9px;
+    display: block;
+    line-height: 1.2;
+  }
+
+  .nav-item.active {
+    border-left: none;
+    border-bottom: 3px solid var(--primary-color);
+  }
+
+  /* User info - Icône seulement */
+  .sidebar-footer {
+    padding: 10px 5px;
+  }
+
+  .user-info {
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .user-avatar {
+    width: 35px;
+    height: 35px;
+    font-size: 16px;
+  }
+
+  .user-details {
+    display: none;
+  }
+
+  /* Logout - Icône seulement */
+  .logout-btn {
+    padding: 8px;
+    min-height: 40px;
+  }
+
   .logout-btn span {
     display: none;
   }
 
-  .user-info {
-    justify-content: center;
+  /* ============================================
+     SIDEBAR EXPANDED (quand ouvert sur mobile)
+     ============================================ */
+  .sidebar.expanded {
+    width: 280px;
+    box-shadow: var(--shadow-lg);
+    transform: translateX(0);
   }
+
+  .sidebar-overlay {
+    display: block;
+  }
+
+  /* Logo avec texte */
+  .sidebar.expanded .logo {
+    flex-direction: row;
+    padding: 0 20px 30px;
+  }
+
+  .sidebar.expanded .logo h2 {
+    display: block;
+  }
+
+  .sidebar.expanded .logo-icon {
+    font-size: 32px;
+  }
+
+  /* Navigation avec texte */
+  .sidebar.expanded .nav-item {
+    flex-direction: row;
+    padding: 14px 20px;
+    text-align: left;
+    font-size: 15px;
+    gap: 12px;
+  }
+
+  .sidebar.expanded .nav-item span {
+    font-size: 15px;
+  }
+
+  .sidebar.expanded .nav-item.active {
+    border-left: 4px solid var(--primary-color);
+    border-bottom: none;
+  }
+
+  /* User info complet */
+  .sidebar.expanded .user-info {
+    flex-direction: row;
+  }
+
+  .sidebar.expanded .user-avatar {
+    width: 45px;
+    height: 45px;
+    font-size: 18px;
+  }
+
+  .sidebar.expanded .user-details {
+    display: block;
+  }
+
+  /* Logout avec texte */
+  .sidebar.expanded .logout-btn span {
+    display: inline;
+  }
+}
+
+/* ============================================
+   TRÈS PETITS ÉCRANS (< 480px)
+   ============================================ */
+@media (max-width: 480px) {
+  .sidebar {
+    width: 60px;
+  }
+
+  .nav-item {
+    padding: 10px 5px;
+  }
+
+  .nav-item span {
+    font-size: 8px;
+  }
+
+  .nav-item svg {
+    font-size: 18px;
+  }
+
+  .user-avatar {
+    width: 30px;
+    height: 30px;
+    font-size: 14px;
+  }
+
+  .logout-btn {
+    padding: 6px;
+  }
+
+  .sidebar.expanded {
+    width: 260px;
+  }
+}
+
+/* ============================================
+   TABLETTE (769px - 1024px)
+   ============================================ */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .sidebar {
+    width: 200px;
+  }
+
+  .logo h2 {
+    font-size: 18px;
+  }
+
+  .logo-icon {
+    font-size: 28px;
+  }
+
+  .nav-item {
+    padding: 12px 15px;
+    font-size: 14px;
+  }
+
+  .nav-item svg {
+    font-size: 16px;
+  }
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* Animation d'entrée de la sidebar */
+.sidebar.expanded {
+  animation: slideIn 0.3s ease;
+}
+
+/* ============================================
+   SCROLLBAR PERSONNALISÉE (Sidebar)
+   ============================================ */
+.sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: var(--light-color);
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background: var(--secondary-color);
+  border-radius: 3px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: var(--dark-color);
 }
