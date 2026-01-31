@@ -24,7 +24,7 @@ import versementRoutes from "./routes/versement.route.js";
 const app = express();
 
 // Middleware
-pp.use(
+app.use(
   cors({
     origin: [
       "http://localhost:5173",
