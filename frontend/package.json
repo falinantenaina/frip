@@ -2,7 +2,7 @@
   "name": "friperie-live-frontend",
   "version": "1.0.0",
   "description": "Frontend React pour gestion de vente de friperie en live",
-  "private": true,
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

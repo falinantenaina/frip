@@ -1,21 +1,14 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { 
-  FaShoppingBag, 
-  FaDollarSign, 
-  FaChartLine, 
-  FaBox,
-  FaPlus,
-  FaTruck
-} from 'react-icons/fa';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
-import api from '../utils/api';
-import useAuthStore from '../stores/authStore';
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
+import { useEffect, useState } from "react";
+import { FaBox, FaDollarSign, FaPlus, FaShoppingBag } from "react-icons/fa";
+import { Link } from "react-router-dom";
+import useAuthStore from "../stores/authStore";
+import api from "../utils/api";
 
 const Dashboard = () => {
   const { user } = useAuthStore();
-  const isInvestisseur = user?.role === 'investisseur';
+  const isInvestisseur = user?.role === "investisseur";
 
   const [stats, setStats] = useState({
     totalVentes: 0,
@@ -38,9 +31,9 @@ const Dashboard = () => {
     try {
       // Récupérer les stats globales
       const [ventesRes, depensesRes, ballesRes] = await Promise.all([
-        api.get('/ventes/stats/summary'),
-        api.get('/depenses/stats/summary'),
-        api.get('/balles/stats/summary'),
+        api.get("/ventes/stats/summary"),
+        api.get("/depenses/stats/summary"),
+        api.get("/balles/stats/summary"),
       ]);
 
       setStats({
@@ -52,51 +45,52 @@ const Dashboard = () => {
       });
 
       // Récupérer les ventes récentes
-      const ventesRecentes = await api.get('/ventes?limit=5');
+      const ventesRecentes = await api.get("/ventes?limit=5");
       setRecentVentes(ventesRecentes.data.data.slice(0, 5));
 
       // Récupérer les balles
-      const ballesData = await api.get('/balles');
+      const ballesData = await api.get("/balles");
       setBalles(ballesData.data.data.slice(0, 5));
-
     } catch (error) {
-      console.error('Erreur chargement dashboard:', error);
+      console.error("Erreur chargement dashboard:", error);
     } finally {
       setLoading(false);
     }
   };
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('fr-FR', {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount) + ' AR';
+    return (
+      new Intl.NumberFormat("fr-FR", {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      }).format(amount) + " AR"
+    );
   };
 
   const formatDate = (date) => {
-    return format(new Date(date), 'dd MMM yyyy', { locale: fr });
+    return format(new Date(date), "dd MMM yyyy", { locale: fr });
   };
 
   const getStatutClass = (statut) => {
     const classes = {
-      en_attente: 'en_attente',
-      en_cours: 'en_cours',
-      livre: 'livre',
-      livré: 'livre',
-      annule: 'annule',
-      annulé: 'annule',
+      en_attente: "en_attente",
+      en_cours: "en_cours",
+      livre: "livre",
+      livré: "livre",
+      annule: "annule",
+      annulé: "annule",
     };
-    return classes[statut] || 'en_attente';
+    return classes[statut] || "en_attente";
   };
 
   const getStatutLabel = (statut) => {
     const labels = {
-      en_attente: 'En attente',
-      en_cours: 'En cours',
-      livre: 'Livré',
-      livré: 'Livré',
-      annule: 'Annulé',
-      annulé: 'Annulé',
+      en_attente: "En attente",
+      en_cours: "En cours",
+      livre: "Livré",
+      livré: "Livré",
+      annule: "Annulé",
+      annulé: "Annulé",
     };
     return labels[statut] || statut;
   };
@@ -117,7 +111,7 @@ const Dashboard = () => {
         <div>
           <h1 className="page-title">Tableau de bord</h1>
           <p className="text-secondary">
-            {format(new Date(), 'EEEE dd MMMM yyyy', { locale: fr })}
+            {format(new Date(), "EEEE dd MMMM yyyy", { locale: fr })}
           </p>
         </div>
         {!isInvestisseur && (
@@ -149,7 +143,7 @@ const Dashboard = () => {
           </div>
         </div>
 
-        <div className="stat-card">
+        {/* <div className="stat-card">
           <div className="stat-icon orange">
             <FaChartLine />
           </div>
@@ -157,7 +151,7 @@ const Dashboard = () => {
             <h3>{formatCurrency(stats.totalBenefice)}</h3>
             <p>Bénéfice net</p>
           </div>
-        </div>
+        </div> */}
 
         <div className="stat-card">
           <div className="stat-icon purple">
@@ -170,7 +164,9 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+      <div
+        style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}
+      >
         {/* Ventes récentes */}
         <div className="card">
           <div className="card-header">
@@ -209,7 +205,9 @@ const Dashboard = () => {
                         </strong>
                       </td>
                       <td>
-                        <span className={`status-badge ${getStatutClass(vente.statutLivraison)}`}>
+                        <span
+                          className={`status-badge ${getStatutClass(vente.statutLivraison)}`}
+                        >
                           {getStatutLabel(vente.statutLivraison)}
                         </span>
                       </td>
@@ -253,7 +251,11 @@ const Dashboard = () => {
                       </td>
                       <td>{balle.nombreVentes || 0}</td>
                       <td>
-                        <strong className={balle.benefice >= 0 ? 'text-success' : 'text-danger'}>
+                        <strong
+                          className={
+                            balle.benefice >= 0 ? "text-success" : "text-danger"
+                          }
+                        >
                           {formatCurrency(balle.benefice)}
                         </strong>
                       </td>

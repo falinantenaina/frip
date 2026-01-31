@@ -1,15 +1,15 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { GiClothes } from 'react-icons/gi';
-import { FaEnvelope, FaLock } from 'react-icons/fa';
-import { toast } from 'react-toastify';
-import useAuthStore from '../stores/authStore';
-import './Auth.css';
+import { useState } from "react";
+import { FaEnvelope, FaLock } from "react-icons/fa";
+import { GiClothes } from "react-icons/gi";
+import { Link, useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
+import useAuthStore from "../stores/authStore";
+import "./Auth.css";
 
 const Login = () => {
   const [formData, setFormData] = useState({
-    email: '',
-    motDePasse: '',
+    email: "",
+    motDePasse: "",
   });
 
   const { login, loading } = useAuthStore();
@@ -28,10 +28,10 @@ const Login = () => {
     const result = await login(formData.email, formData.motDePasse);
 
     if (result.success) {
-      toast.success('Connexion réussie !');
-      navigate('/');
+      toast.success("Connexion réussie !");
+      navigate("/");
     } else {
-      toast.error(result.message || 'Erreur de connexion');
+      toast.error(result.message || "Erreur de connexion");
     }
   };
 
@@ -40,7 +40,7 @@ const Login = () => {
       <div className="auth-card">
         <div className="auth-header">
           <GiClothes className="auth-icon" />
-          <h1>Friperie Live</h1>
+          <h1>Mi Chic</h1>
           <p>Connectez-vous à votre compte</p>
         </div>
 
@@ -80,13 +80,13 @@ const Login = () => {
             className="btn btn-primary btn-block"
             disabled={loading}
           >
-            {loading ? 'Connexion...' : 'Se connecter'}
+            {loading ? "Connexion..." : "Se connecter"}
           </button>
         </form>
 
         <div className="auth-footer">
           <p>
-            Pas de compte ?{' '}
+            Pas de compte ?{" "}
             <Link to="/register" className="auth-link">
               S'inscrire
             </Link>
