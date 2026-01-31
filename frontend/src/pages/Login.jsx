@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { FaEnvelope, FaLock } from "react-icons/fa";
 import { GiClothes } from "react-icons/gi";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import useAuthStore from "../stores/authStore";
 import "./Auth.css";
@@ -84,28 +84,14 @@ const Login = () => {
           </button>
         </form>
 
-        <div className="auth-footer">
+        {/*  <div className="auth-footer">
           <p>
             Pas de compte ?{" "}
             <Link to="/register" className="auth-link">
               S'inscrire
             </Link>
           </p>
-        </div>
-
-        <div className="auth-demo">
-          <p className="demo-title">Comptes de démonstration :</p>
-          <div className="demo-accounts">
-            <div className="demo-account">
-              <strong>Admin:</strong>
-              <span>admin@friperie.com / admin123</span>
-            </div>
-            <div className="demo-account">
-              <strong>Investisseur:</strong>
-              <span>investisseur@friperie.com / invest123</span>
-            </div>
-          </div>
-        </div>
+        </div> */}
       </div>
     </div>
   );
