@@ -17,7 +17,9 @@ export const getRapportGlobal = async (req, res, next) => {
         matchQuery.dateVente.$gte = new Date(dateDebut);
       }
       if (dateFin) {
-        matchQuery.dateVente.$lte = new Date(dateFin);
+        const fin = new Date(dateFin);
+        fin.setDate(fin.getDate() + 1);
+        matchQuery.dateVente.$lte = fin;
       }
     }
 
@@ -131,7 +133,9 @@ export const getRapportParJour = async (req, res, next) => {
         matchQuery.dateVente.$gte = new Date(dateDebut);
       }
       if (dateFin) {
-        matchQuery.dateVente.$lte = new Date(dateFin);
+        const fin = new Date(dateFin);
+        fin.setDate(fin.getDate() + 10);
+        matchQuery.dateVente.$lte = fin;
       }
     }
 
@@ -240,7 +244,9 @@ export const getRapportParSemaine = async (req, res, next) => {
         matchQuery.dateVente.$gte = new Date(dateDebut);
       }
       if (dateFin) {
-        matchQuery.dateVente.$lte = new Date(dateFin);
+        const fin = new Date(dateFin);
+        fin.setDate(fin.getDate() + 1);
+        matchQuery.dateVente.$lte = fin;
       }
     }
 
@@ -355,7 +361,9 @@ export const getRapportParMois = async (req, res, next) => {
         matchQuery.dateVente.$gte = new Date(dateDebut);
       }
       if (dateFin) {
-        matchQuery.dateVente.$lte = new Date(dateFin);
+        const fin = new Date(dateFin);
+        fin.setDate(fin.getDate() + 1);
+        matchQuery.dateVente.$lte = fin;
       }
     }
 
