@@ -1,5 +1,5 @@
-import { create } from 'zustand';
-import api from '../utils/api';
+import { create } from "zustand";
+import api from "../utils/api";
 
 const useVenteStore = create((set, get) => ({
   ventes: [],
@@ -11,11 +11,12 @@ const useVenteStore = create((set, get) => ({
     set({ loading: true, error: null });
     try {
       const params = new URLSearchParams(filters).toString();
-      const response = await api.get(`/ventes${params ? `?${params}` : ''}`);
+      const response = await api.get(`/ventes${params ? `?${params}` : ""}`);
       set({ ventes: response.data.data, loading: false });
       return { success: true };
     } catch (error) {
-      const errorMessage = error.response?.data?.message || 'Erreur de chargement';
+      const errorMessage =
+        error.response?.data?.message || "Erreur de chargement";
       set({ loading: false, error: errorMessage });
       return { success: false, message: errorMessage };
     }
@@ -28,7 +29,8 @@ const useVenteStore = create((set, get) => ({
       set({ currentVente: response.data.data, loading: false });
       return { success: true, data: response.data.data };
     } catch (error) {
-      const errorMessage = error.response?.data?.message || 'Erreur de chargement';
+      const errorMessage =
+        error.response?.data?.message || "Erreur de chargement";
       set({ loading: false, error: errorMessage });
       return { success: false, message: errorMessage };
     }
@@ -37,15 +39,32 @@ const useVenteStore = create((set, get) => ({
   createVente: async (venteData) => {
     set({ loading: true, error: null });
     try {
-      const response = await api.post('/ventes', venteData);
-      const newVente = response.data.data;
-      set((state) => ({
-        ventes: [newVente, ...state.ventes],
-        loading: false,
-      }));
-      return { success: true, data: newVente };
+      const response = await api.post("/ventes", venteData);
+      // Le backend retourne { venteFusionnee: bool, data: vente }
+      const { venteFusionnee, data: newVente } = response.data;
+
+      set((state) => {
+        if (venteFusionnee) {
+          // Mettre à jour la vente existante dans la liste
+          return {
+            ventes: state.ventes.map((v) =>
+              v._id === newVente._id ? newVente : v,
+            ),
+            loading: false,
+          };
+        } else {
+          // Ajouter la nouvelle vente en tête de liste
+          return {
+            ventes: [newVente, ...state.ventes],
+            loading: false,
+          };
+        }
+      });
+
+      return { success: true, data: newVente, venteFusionnee };
     } catch (error) {
-      const errorMessage = error.response?.data?.message || 'Erreur de création';
+      const errorMessage =
+        error.response?.data?.message || "Erreur de création";
       set({ loading: false, error: errorMessage });
       return { success: false, message: errorMessage };
     }
@@ -58,12 +77,14 @@ const useVenteStore = create((set, get) => ({
       const updatedVente = response.data.data;
       set((state) => ({
         ventes: state.ventes.map((v) => (v._id === id ? updatedVente : v)),
-        currentVente: state.currentVente?._id === id ? updatedVente : state.currentVente,
+        currentVente:
+          state.currentVente?._id === id ? updatedVente : state.currentVente,
         loading: false,
       }));
       return { success: true, data: updatedVente };
     } catch (error) {
-      const errorMessage = error.response?.data?.message || 'Erreur de mise à jour';
+      const errorMessage =
+        error.response?.data?.message || "Erreur de mise à jour";
       set({ loading: false, error: errorMessage });
       return { success: false, message: errorMessage };
     }
@@ -72,7 +93,9 @@ const useVenteStore = create((set, get) => ({
   annulerVente: async (id, raisonAnnulation) => {
     set({ loading: true, error: null });
     try {
-      const response = await api.put(`/ventes/${id}/annuler`, { raisonAnnulation });
+      const response = await api.put(`/ventes/${id}/annuler`, {
+        raisonAnnulation,
+      });
       const updatedVente = response.data.data;
       set((state) => ({
         ventes: state.ventes.map((v) => (v._id === id ? updatedVente : v)),
@@ -80,7 +103,8 @@ const useVenteStore = create((set, get) => ({
       }));
       return { success: true, data: updatedVente };
     } catch (error) {
-      const errorMessage = error.response?.data?.message || 'Erreur d\'annulation';
+      const errorMessage =
+        error.response?.data?.message || "Erreur d'annulation";
       set({ loading: false, error: errorMessage });
       return { success: false, message: errorMessage };
     }
@@ -96,7 +120,83 @@ const useVenteStore = create((set, get) => ({
       }));
       return { success: true };
     } catch (error) {
-      const errorMessage = error.response?.data?.message || 'Erreur de suppression';
+      const errorMessage =
+        error.response?.data?.message || "Erreur de suppression";
+      set({ loading: false, error: errorMessage });
+      return { success: false, message: errorMessage };
+    }
+  },
+
+  // Ajouter un produit à une vente existante (via API dédiée)
+  ajouterProduit: async (venteId, produitData) => {
+    set({ loading: true, error: null });
+    try {
+      const response = await api.post(
+        `/ventes/${venteId}/ajouter-produit`,
+        produitData,
+      );
+      const updatedVente = response.data.data;
+      set((state) => ({
+        ventes: state.ventes.map((v) => (v._id === venteId ? updatedVente : v)),
+        currentVente:
+          state.currentVente?._id === venteId
+            ? updatedVente
+            : state.currentVente,
+        loading: false,
+      }));
+      return { success: true, data: updatedVente };
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || "Erreur d'ajout";
+      set({ loading: false, error: errorMessage });
+      return { success: false, message: errorMessage };
+    }
+  },
+
+  // Supprimer un produit d'une vente groupée
+  supprimerProduit: async (venteId, produitEntryId) => {
+    set({ loading: true, error: null });
+    try {
+      const response = await api.delete(
+        `/ventes/${venteId}/produits/${produitEntryId}`,
+      );
+      const updatedVente = response.data.data;
+      set((state) => ({
+        ventes: state.ventes.map((v) => (v._id === venteId ? updatedVente : v)),
+        currentVente:
+          state.currentVente?._id === venteId
+            ? updatedVente
+            : state.currentVente,
+        loading: false,
+      }));
+      return { success: true, data: updatedVente };
+    } catch (error) {
+      const errorMessage =
+        error.response?.data?.message || "Erreur de suppression";
+      set({ loading: false, error: errorMessage });
+      return { success: false, message: errorMessage };
+    }
+  },
+
+  modifierProduit: async (venteId, produitEntryId, data) => {
+    set({ loading: true, error: null });
+    try {
+      const response = await api.put(
+        `/ventes/${venteId}/produits/${produitEntryId}`,
+        data,
+      );
+      const updatedVente = response.data.data;
+      set((state) => ({
+        ventes: state.ventes.map((v) => (v._id === venteId ? updatedVente : v)),
+        currentVente:
+          state.currentVente?._id === venteId
+            ? updatedVente
+            : state.currentVente,
+        loading: false,
+      }));
+      return { success: true, data: updatedVente };
+    } catch (error) {
+      const errorMessage =
+        error.response?.data?.message || "Erreur de modification";
       set({ loading: false, error: errorMessage });
       return { success: false, message: errorMessage };
     }

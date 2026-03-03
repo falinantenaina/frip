@@ -1,16 +1,16 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
-import { toast } from 'react-toastify';
-import useVenteStore from '../stores/venteStore';
-import useBalleStore from '../stores/balleStore';
-import { useProduitStore, useLivreurStore } from '../stores/otherStores';
-import api from '../utils/api';
+import { useEffect, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { toast } from "react-toastify";
+import useBalleStore from "../stores/balleStore";
+import { useLivreurStore } from "../stores/otherStores";
+import useVenteStore from "../stores/venteStore";
+import api from "../utils/api";
 
 const VenteForm = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const [searchParams] = useSearchParams();
-  const balleIdParam = searchParams.get('balle');
+  const balleIdParam = searchParams.get("balle");
 
   const { createVente, updateVente, fetchVente, loading } = useVenteStore();
   const { balles, fetchBalles } = useBalleStore();
@@ -18,28 +18,26 @@ const VenteForm = () => {
 
   const [produitsDisponibles, setProduitsDisponibles] = useState([]);
   const [formData, setFormData] = useState({
-    balle: balleIdParam || '',
-    produit: '',
-    nomClient: '',
-    telephoneClient: '',
-    nomProduit: '',
-    tailleProduit: '',
-    prixVente: '',
-    livreur: '',
-    fraisLivraison: '0',
-    lieuLivraison: '',
-    statutLivraison: 'en_attente',
-    commentaires: '',
+    balle: balleIdParam || "",
+    produit: "",
+    nomClient: "",
+    telephoneClient: "",
+    nomProduit: "",
+    tailleProduit: "",
+    prixVente: "",
+    livreur: "",
+    fraisLivraison: "0",
+    lieuLivraison: "",
+    statutLivraison: "en_attente",
+    commentaires: "",
   });
 
-  const [venteMode, setVenteMode] = useState('avec_produit'); // 'avec_produit' ou 'sans_produit'
-
+  const [venteMode, setVenteMode] = useState("avec_produit");
   const isEdit = !!id;
 
   useEffect(() => {
     fetchBalles();
     fetchLivreurs();
-    
     if (isEdit) {
       loadVente();
     }
@@ -51,20 +49,19 @@ const VenteForm = () => {
       const vente = result.data;
       setFormData({
         balle: vente.balle._id,
-        produit: vente.produit?._id || '',
+        produit: vente.produit?._id || "",
         nomClient: vente.nomClient,
         telephoneClient: vente.telephoneClient,
         nomProduit: vente.nomProduit,
-        tailleProduit: vente.tailleProduit || '',
+        tailleProduit: vente.tailleProduit || "",
         prixVente: vente.prixVente.toString(),
-        livreur: vente.livreur?._id || '',
+        livreur: vente.livreur?._id || "",
         fraisLivraison: vente.fraisLivraison.toString(),
         lieuLivraison: vente.lieuLivraison,
         statutLivraison: vente.statutLivraison,
-        commentaires: vente.commentaires || '',
+        commentaires: vente.commentaires || "",
       });
-      
-      setVenteMode(vente.produit ? 'avec_produit' : 'sans_produit');
+      setVenteMode(vente.produit ? "avec_produit" : "sans_produit");
     }
   };
 
@@ -79,26 +76,22 @@ const VenteForm = () => {
       const response = await api.get(`/produits/balle/${balleId}/disponibles`);
       setProduitsDisponibles(response.data.data);
     } catch (error) {
-      console.error('Erreur chargement produits:', error);
+      console.error("Erreur chargement produits:", error);
     }
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: value,
-    });
+    setFormData({ ...formData, [name]: value });
 
-    // Si on sélectionne un produit, pré-remplir les infos
-    if (name === 'produit' && value) {
+    if (name === "produit" && value) {
       const produit = produitsDisponibles.find((p) => p._id === value);
       if (produit) {
         setFormData({
           ...formData,
           produit: value,
           nomProduit: produit.nom,
-          tailleProduit: produit.taille || '',
+          tailleProduit: produit.taille || "",
           prixVente: produit.prixVente.toString(),
         });
       }
@@ -121,24 +114,36 @@ const VenteForm = () => {
       commentaires: formData.commentaires,
     };
 
-    // Ajouter le produit et livreur s'ils sont sélectionnés
-    if (venteMode === 'avec_produit' && formData.produit) {
+    if (venteMode === "avec_produit" && formData.produit) {
       data.produit = formData.produit;
     }
-
     if (formData.livreur) {
       data.livreur = formData.livreur;
     }
 
-    const result = isEdit 
-      ? await updateVente(id, data)
-      : await createVente(data);
-
-    if (result.success) {
-      toast.success(isEdit ? 'Vente modifiée avec succès' : 'Vente créée avec succès');
-      navigate('/ventes');
+    if (isEdit) {
+      const result = await updateVente(id, data);
+      if (result.success) {
+        toast.success("Vente modifiée avec succès");
+        navigate("/ventes");
+      } else {
+        toast.error(result.message || "Erreur lors de la modification");
+      }
     } else {
-      toast.error(result.message || 'Erreur lors de l\'enregistrement');
+      const result = await createVente(data);
+      if (result.success) {
+        if (result.venteFusionnee) {
+          toast.success(
+            `✅ Produit ajouté à la commande existante de ${formData.nomClient} !`,
+            { autoClose: 4000 },
+          );
+        } else {
+          toast.success("Vente créée avec succès");
+        }
+        navigate("/ventes");
+      } else {
+        toast.error(result.message || "Erreur lors de l'enregistrement");
+      }
     }
   };
 
@@ -151,10 +156,38 @@ const VenteForm = () => {
   return (
     <div className="main-content">
       <div className="page-header">
-        <h1 className="page-title">{isEdit ? 'Modifier la vente' : 'Nouvelle Vente'}</h1>
+        <h1 className="page-title">
+          {isEdit ? "Modifier la vente" : "Nouvelle Vente"}
+        </h1>
       </div>
 
-      <div className="card" style={{ maxWidth: '900px', margin: '0 auto' }}>
+      {/* Info fusion automatique */}
+      {/* {!isEdit && (
+        <div
+          style={{
+            background: "#eff6ff",
+            border: "1px solid #bfdbfe",
+            borderRadius: "8px",
+            padding: "12px 16px",
+            marginBottom: "20px",
+            maxWidth: "900px",
+            margin: "0 auto 20px",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            fontSize: "14px",
+            color: "#1d4ed8",
+          }}
+        >
+          <span style={{ fontSize: "18px" }}>💡</span>
+          <span>
+            Si ce client a déjà une commande aujourd'hui, le produit sera
+            automatiquement ajouté à sa commande existante.
+          </span>
+        </div>
+      )} */}
+
+      <div className="card" style={{ maxWidth: "900px", margin: "0 auto" }}>
         {/* Mode de vente */}
         <div className="mb-20">
           <label className="form-label">Mode de vente</label>
@@ -164,7 +197,7 @@ const VenteForm = () => {
                 type="radio"
                 name="venteMode"
                 value="avec_produit"
-                checked={venteMode === 'avec_produit'}
+                checked={venteMode === "avec_produit"}
                 onChange={(e) => setVenteMode(e.target.value)}
               />
               <span>Avec produit existant</span>
@@ -174,7 +207,7 @@ const VenteForm = () => {
                 type="radio"
                 name="venteMode"
                 value="sans_produit"
-                checked={venteMode === 'sans_produit'}
+                checked={venteMode === "sans_produit"}
                 onChange={(e) => setVenteMode(e.target.value)}
               />
               <span>Vente directe (sans produit)</span>
@@ -183,7 +216,7 @@ const VenteForm = () => {
         </div>
 
         <form onSubmit={handleSubmit}>
-          {/* Sélection de la balle */}
+          {/* Balle */}
           <div className="form-group">
             <label className="form-label">Balle *</label>
             <select
@@ -202,8 +235,8 @@ const VenteForm = () => {
             </select>
           </div>
 
-          {/* Sélection du produit (si mode avec produit) */}
-          {venteMode === 'avec_produit' && (
+          {/* Produit (mode avec produit) */}
+          {venteMode === "avec_produit" && (
             <div className="form-group">
               <label className="form-label">Produit *</label>
               <select
@@ -211,7 +244,7 @@ const VenteForm = () => {
                 className="form-select"
                 value={formData.produit}
                 onChange={handleChange}
-                required={venteMode === 'avec_produit'}
+                required={venteMode === "avec_produit"}
                 disabled={!formData.balle}
               >
                 <option value="">Sélectionner un produit</option>
@@ -234,8 +267,8 @@ const VenteForm = () => {
             </div>
           )}
 
-          {/* Informations produit (si mode sans produit) */}
-          {venteMode === 'sans_produit' && (
+          {/* Infos produit (mode sans produit) */}
+          {venteMode === "sans_produit" && (
             <>
               <div className="form-row">
                 <div className="form-group">
@@ -262,7 +295,6 @@ const VenteForm = () => {
                   />
                 </div>
               </div>
-
               <div className="form-group">
                 <label className="form-label">Prix de vente (AR) *</label>
                 <input
@@ -380,8 +412,8 @@ const VenteForm = () => {
           </div>
 
           {/* Résumé */}
-          <div className="card" style={{ background: 'var(--light-color)' }}>
-            <h4 className="mb-10">Résumé</h4>
+          <div className="card" style={{ background: "var(--light-color)" }}>
+            <h4 className="mb-10">Résumé du produit ajouté</h4>
             <div className="flex-between mb-10">
               <span>Prix de vente:</span>
               <strong>{formData.prixVente || 0} AR</strong>
@@ -393,13 +425,13 @@ const VenteForm = () => {
             <div
               className="flex-between"
               style={{
-                borderTop: '2px solid var(--border-color)',
-                paddingTop: '10px',
-                marginTop: '10px',
+                borderTop: "2px solid var(--border-color)",
+                paddingTop: "10px",
+                marginTop: "10px",
               }}
             >
-              <span className="font-bold">Total client:</span>
-              <strong className="text-success" style={{ fontSize: '20px' }}>
+              <span className="font-bold">Total:</span>
+              <strong className="text-success" style={{ fontSize: "20px" }}>
                 {calculateTotal()} AR
               </strong>
             </div>
@@ -409,12 +441,20 @@ const VenteForm = () => {
             <button
               type="button"
               className="btn btn-secondary"
-              onClick={() => navigate('/ventes')}
+              onClick={() => navigate("/ventes")}
             >
               Annuler
             </button>
-            <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? 'Enregistrement...' : (isEdit ? 'Modifier la vente' : 'Enregistrer la vente')}
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={loading}
+            >
+              {loading
+                ? "Enregistrement..."
+                : isEdit
+                  ? "Modifier la vente"
+                  : "Enregistrer la vente"}
             </button>
           </div>
         </form>
