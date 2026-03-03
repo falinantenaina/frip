@@ -1,5 +1,28 @@
 import mongoose from "mongoose";
 
+// Sous-schema pour chaque produit dans une vente
+const produitVenteSchema = new mongoose.Schema(
+  {
+    produit: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Produit",
+    },
+    nomProduit: {
+      type: String,
+      required: true,
+    },
+    tailleProduit: {
+      type: String,
+    },
+    prixVente: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+  },
+  { _id: true },
+);
+
 const venteSchema = new mongoose.Schema(
   {
     balle: {
@@ -7,10 +30,26 @@ const venteSchema = new mongoose.Schema(
       ref: "Balle",
       required: [true, "La référence à la balle est requise"],
     },
+
+    // ─── NOUVEAU : tableau de produits ───────────────────────────────────────
+    // Chaque entrée représente un article vendu au même client le même jour.
+    produits: [produitVenteSchema],
+
+    // Champs de compatibilité conservés pour ne pas casser l'existant
+    // (ils seront alimentés avec le premier produit ou mis à jour dynamiquement)
     produit: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Produit",
     },
+    nomProduit: {
+      type: String,
+      required: true,
+    },
+    tailleProduit: {
+      type: String,
+    },
+    // ─────────────────────────────────────────────────────────────────────────
+
     // Informations client
     nomClient: {
       type: String,
@@ -22,19 +61,13 @@ const venteSchema = new mongoose.Schema(
       required: [true, "Le téléphone du client est requis"],
       trim: true,
     },
-    // Détails produit (copie pour historique)
-    nomProduit: {
-      type: String,
-      required: true,
-    },
-    tailleProduit: {
-      type: String,
-    },
+
     prixVente: {
       type: Number,
       required: [true, "Le prix de vente est requis"],
       min: 0,
     },
+
     // Livraison
     livreur: {
       type: mongoose.Schema.Types.ObjectId,
@@ -58,11 +91,12 @@ const venteSchema = new mongoose.Schema(
     dateLivraison: {
       type: Date,
     },
+
     // Montants
     montantTotal: {
       type: Number,
-      // required: true,
     },
+
     // Notes et commentaires
     commentaires: {
       type: String,
@@ -83,8 +117,13 @@ const venteSchema = new mongoose.Schema(
 );
 
 // Calculer le montant total avant sauvegarde
+// prixVente = somme de tous les produits dans le tableau produits
 venteSchema.pre("save", function () {
-  this.montantTotal = this.prixVente + this.fraisLivraison;
+  // Si le tableau produits est renseigné, recalculer prixVente comme somme
+  if (this.produits && this.produits.length > 0) {
+    this.prixVente = this.produits.reduce((sum, p) => sum + p.prixVente, 0);
+  }
+  this.montantTotal = this.prixVente + (this.fraisLivraison || 0);
 });
 
 venteSchema.pre(["findOneAndUpdate", "updateOne", "updateMany"], function () {
@@ -105,6 +144,8 @@ venteSchema.index({ balle: 1, dateVente: -1 });
 venteSchema.index({ statutLivraison: 1, dateVente: -1 });
 venteSchema.index({ livreur: 1, dateVente: -1 });
 venteSchema.index({ dateVente: -1 });
+// Index pour la recherche de vente existante du même client le même jour
+venteSchema.index({ telephoneClient: 1, dateVente: -1 });
 
 export const Vente = mongoose.model("Vente", venteSchema);
 
