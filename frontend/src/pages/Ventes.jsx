@@ -8,7 +8,7 @@ import {
   startOfDay,
 } from "date-fns";
 import { fr } from "date-fns/locale";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   FaBan,
@@ -27,9 +27,6 @@ import useBalleStore from "../stores/balleStore";
 import useVenteStore from "../stores/venteStore";
 import api from "../utils/api";
 
-// =============================================================================
-// MODALE : Ajouter un produit à une commande existante
-// =============================================================================
 const AjouterProduitModal = ({ vente, onClose }) => {
   const { ajouterProduit, loading } = useVenteStore();
   const { balles, fetchBalles } = useBalleStore();
@@ -313,9 +310,6 @@ const AjouterProduitModal = ({ vente, onClose }) => {
   );
 };
 
-// =============================================================================
-// MODALE : Modifier un produit d'une vente groupée
-// =============================================================================
 const ModifierProduitModal = ({ vente, produitEntry, onClose }) => {
   const { modifierProduit, loading } = useVenteStore();
   const { balles, fetchBalles } = useBalleStore();
@@ -548,9 +542,322 @@ const ModifierProduitModal = ({ vente, produitEntry, onClose }) => {
   );
 };
 
-// =============================================================================
-// PAGE PRINCIPALE : Liste des ventes
-// =============================================================================
+const VenteCard = ({
+  vente,
+  expanded,
+  onToggleExpand,
+  onOpenModalVente,
+  onOpenModalModifier,
+  onChangeStatut,
+  onDelete,
+  onAnnuler,
+  onSupprimerProduit,
+  formatCurrency,
+  formatDate,
+  getStatutClass,
+  getStatutLabel,
+  isGroupee,
+}) => {
+  const grouped = isGroupee(vente);
+  const canAdd = vente.statutLivraison !== "annulé";
+
+  return (
+    <div
+      style={{
+        background: "white",
+        borderRadius: "12px",
+        boxShadow: "var(--shadow)",
+        marginBottom: "12px",
+        overflow: "hidden",
+        borderLeft: grouped
+          ? "4px solid #2563eb"
+          : "4px solid var(--border-color)",
+      }}
+    >
+      <div style={{ padding: "14px 16px" }}>
+        {/* Ligne 1 : client + statut */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            marginBottom: "8px",
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                flexWrap: "wrap",
+              }}
+            >
+              <strong style={{ fontSize: "15px", color: "var(--dark-color)" }}>
+                {vente.nomClient}
+              </strong>
+              {canAdd && (
+                <button
+                  onClick={() => onOpenModalVente(vente)}
+                  title="Ajouter un produit"
+                  style={{
+                    background: "#2563eb",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "50%",
+                    width: "22px",
+                    height: "22px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    fontSize: "10px",
+                    flexShrink: 0,
+                  }}
+                >
+                  <FaPlus />
+                </button>
+              )}
+            </div>
+            <div
+              style={{
+                fontSize: "12px",
+                color: "var(--secondary-color)",
+                marginTop: "2px",
+              }}
+            >
+              {vente.telephoneClient} · {formatDate(vente.dateVente)}
+            </div>
+          </div>
+          <button
+            className={`status-badge ${getStatutClass(vente.statutLivraison)}`}
+            onClick={() => onChangeStatut(vente._id, vente.statutLivraison)}
+            style={{
+              cursor:
+                vente.statutLivraison === "annulé" ? "not-allowed" : "pointer",
+              border: "none",
+              flexShrink: 0,
+              marginLeft: "8px",
+              opacity: vente.statutLivraison === "annulé" ? 0.6 : 1,
+            }}
+            disabled={vente.statutLivraison === "annulé"}
+          >
+            {getStatutLabel(vente.statutLivraison)}
+          </button>
+        </div>
+
+        {/* Ligne 2 : produit */}
+        <div
+          style={{
+            fontSize: "13px",
+            color: "var(--dark-color)",
+            marginBottom: "8px",
+          }}
+        >
+          {grouped ? (
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                color: "#1d4ed8",
+                fontWeight: 600,
+              }}
+            >
+              <FaBoxOpen />
+              {vente.produits.length} produits
+            </span>
+          ) : (
+            <span>
+              {vente.nomProduit}
+              {vente.tailleProduit && (
+                <span style={{ color: "var(--secondary-color)" }}>
+                  {" "}
+                  · {vente.tailleProduit}
+                </span>
+              )}
+            </span>
+          )}
+        </div>
+
+        {/* Ligne 3 : montants */}
+        <div
+          style={{
+            display: "flex",
+            gap: "16px",
+            flexWrap: "wrap",
+            fontSize: "13px",
+            marginBottom: "10px",
+          }}
+        >
+          <span style={{ color: "var(--secondary-color)" }}>
+            Vente :{" "}
+            <strong style={{ color: "var(--dark-color)" }}>
+              {formatCurrency(vente.prixVente)}
+            </strong>
+          </span>
+          {vente.fraisLivraison > 0 && (
+            <span style={{ color: "var(--secondary-color)" }}>
+              Frais :{" "}
+              <strong style={{ color: "var(--dark-color)" }}>
+                {formatCurrency(vente.fraisLivraison)}
+              </strong>
+            </span>
+          )}
+          <span style={{ color: "var(--secondary-color)" }}>
+            Total :{" "}
+            <strong style={{ color: "var(--success-color)", fontSize: "14px" }}>
+              {formatCurrency(vente.montantTotal)}
+            </strong>
+          </span>
+        </div>
+
+        {/* Ligne 4 : livreur + actions */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <div style={{ fontSize: "12px", color: "var(--secondary-color)" }}>
+            {vente.livreur ? (
+              <span>🚚 {vente.livreur.nom}</span>
+            ) : (
+              <span>Pas de livreur</span>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+            {grouped && (
+              <button
+                onClick={() => onToggleExpand(vente._id)}
+                style={{
+                  background: "#dbeafe",
+                  color: "#1d4ed8",
+                  border: "none",
+                  borderRadius: "6px",
+                  padding: "5px 8px",
+                  cursor: "pointer",
+                  fontSize: "12px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                {expanded ? <FaChevronUp /> : <FaChevronDown />}
+                {expanded ? "Masquer" : "Détails"}
+              </button>
+            )}
+            <Link
+              to={`/ventes/${vente._id}/edit`}
+              className="btn btn-sm btn-icon btn-secondary"
+              title="Modifier"
+            >
+              <FaEdit />
+            </Link>
+            {vente.statutLivraison !== "annulé" && (
+              <button
+                className="btn btn-sm btn-icon btn-danger"
+                onClick={() => onAnnuler(vente._id)}
+                title="Annuler"
+              >
+                <FaBan />
+              </button>
+            )}
+            <button
+              className="btn btn-sm btn-icon btn-danger"
+              onClick={() => onDelete(vente._id, vente.nomClient)}
+              title="Supprimer"
+            >
+              <FaTrash />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Sous-produits (vente groupée) */}
+      {grouped && expanded && (
+        <div
+          style={{
+            borderTop: "1px solid var(--border-color)",
+            background: "#f8fafc",
+          }}
+        >
+          {vente.produits.map((pe, idx) => (
+            <div
+              key={pe._id || idx}
+              style={{
+                padding: "10px 16px",
+                borderBottom:
+                  idx < vente.produits.length - 1
+                    ? "1px solid var(--border-color)"
+                    : "none",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <div>
+                <div style={{ fontSize: "13px", fontWeight: 600 }}>
+                  <span style={{ color: "#94a3b8", marginRight: "6px" }}>
+                    #{idx + 1}
+                  </span>
+                  {pe.nomProduit}
+                  {pe.tailleProduit && (
+                    <span
+                      style={{
+                        color: "var(--secondary-color)",
+                        fontWeight: 400,
+                      }}
+                    >
+                      {" "}
+                      · {pe.tailleProduit}
+                    </span>
+                  )}
+                </div>
+                <div
+                  style={{
+                    fontSize: "12px",
+                    color: "var(--secondary-color)",
+                    marginTop: "2px",
+                  }}
+                >
+                  {formatCurrency(pe.prixVente)}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "6px" }}>
+                {vente.statutLivraison !== "annulé" && (
+                  <button
+                    className="btn btn-sm btn-icon btn-secondary"
+                    onClick={() =>
+                      onOpenModalModifier({ vente, produitEntry: pe })
+                    }
+                    title="Modifier"
+                  >
+                    <FaEdit />
+                  </button>
+                )}
+                {vente.produits.length > 1 &&
+                  vente.statutLivraison !== "annulé" && (
+                    <button
+                      className="btn btn-sm btn-icon btn-danger"
+                      onClick={() =>
+                        onSupprimerProduit(vente._id, pe._id, pe.nomProduit)
+                      }
+                      title="Retirer"
+                    >
+                      <FaTrash />
+                    </button>
+                  )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const Ventes = () => {
   const {
     ventes,
@@ -568,8 +875,22 @@ const Ventes = () => {
   const [modalVente, setModalVente] = useState(null);
   const [modalModifier, setModalModifier] = useState(null);
 
+  // ── Ref pour sauvegarder la position de scroll avant ouverture modale ──
+  const scrollPositionRef = useRef(0);
+
+  const openModal = (setter, value) => {
+    scrollPositionRef.current = window.scrollY;
+    setter(value);
+  };
+
+  const closeModal = (setter) => {
+    setter(null);
+    requestAnimationFrame(() => {
+      window.scrollTo(0, scrollPositionRef.current);
+    });
+  };
+
   // ── Filtres de date ──────────────────────────────────────────────────────
-  // periode : "tous" | "jour" | "semaine" | "mois" | "date"
   const [filterPeriode, setFilterPeriode] = useState("tous");
   const [filterDateSpecifique, setFilterDateSpecifique] = useState("");
 
@@ -664,9 +985,8 @@ const Ventes = () => {
     })[s] || s;
   const isGroupee = (v) => v.produits && v.produits.length > 1;
 
-  // ── Logique de filtrage combiné (texte + date) ───────────────────────────
+  // ── Filtrage ─────────────────────────────────────────────────────────────
   const filteredVentes = ventes.filter((vente) => {
-    // Filtre texte
     if (searchTerm) {
       const s = searchTerm.toLowerCase();
       const matchTexte =
@@ -678,34 +998,24 @@ const Ventes = () => {
         );
       if (!matchTexte) return false;
     }
-
-    // Filtre date
     const dateVente = new Date(vente.dateVente);
-    if (filterPeriode === "jour") {
-      return isToday(dateVente);
-    }
-    if (filterPeriode === "semaine") {
-      return isThisWeek(dateVente, { weekStartsOn: 1 }); // semaine commence lundi
-    }
-    if (filterPeriode === "mois") {
-      return isThisMonth(dateVente);
-    }
+    if (filterPeriode === "jour") return isToday(dateVente);
+    if (filterPeriode === "semaine")
+      return isThisWeek(dateVente, { weekStartsOn: 1 });
+    if (filterPeriode === "mois") return isThisMonth(dateVente);
     if (filterPeriode === "date" && filterDateSpecifique) {
       const debut = startOfDay(parseISO(filterDateSpecifique));
       const fin = endOfDay(parseISO(filterDateSpecifique));
       return dateVente >= debut && dateVente <= fin;
     }
-
-    return true; // "tous"
+    return true;
   });
 
-  // ── Total affiché selon le filtre actif ─────────────────────────────────
   const totalFiltre = filteredVentes.reduce(
     (acc, v) => acc + (v.montantTotal || 0),
     0,
   );
 
-  // ── Label descriptif de la période active ───────────────────────────────
   const getPeriodeLabel = () => {
     if (filterPeriode === "jour") return "Aujourd'hui";
     if (filterPeriode === "semaine") return "Cette semaine";
@@ -717,7 +1027,6 @@ const Ventes = () => {
     return null;
   };
 
-  // ── Détection mobile ────────────────────────────────────────────────────
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth <= 768);
@@ -734,7 +1043,6 @@ const Ventes = () => {
       </div>
     );
 
-  // ── Bouton de période réutilisable ───────────────────────────────────────
   const PeriodeBtn = ({ value, label, icon }) => (
     <button
       onClick={() => {
@@ -763,325 +1071,9 @@ const Ventes = () => {
     </button>
   );
 
-  // ── Rendu carte mobile d'une vente ──────────────────────────────────────
-  const VenteCard = ({ vente }) => {
-    const grouped = isGroupee(vente);
-    const expanded = expandedVentes.has(vente._id);
-    const canAdd = vente.statutLivraison !== "annulé";
-
-    return (
-      <div
-        style={{
-          background: "white",
-          borderRadius: "12px",
-          boxShadow: "var(--shadow)",
-          marginBottom: "12px",
-          overflow: "hidden",
-          borderLeft: grouped
-            ? "4px solid #2563eb"
-            : "4px solid var(--border-color)",
-        }}
-      >
-        {/* En-tête carte */}
-        <div style={{ padding: "14px 16px" }}>
-          {/* Ligne 1 : client + statut */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-              marginBottom: "8px",
-            }}
-          >
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  flexWrap: "wrap",
-                }}
-              >
-                <strong
-                  style={{ fontSize: "15px", color: "var(--dark-color)" }}
-                >
-                  {vente.nomClient}
-                </strong>
-                {canAdd && (
-                  <button
-                    onClick={() => setModalVente(vente)}
-                    title="Ajouter un produit"
-                    style={{
-                      background: "#2563eb",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "50%",
-                      width: "22px",
-                      height: "22px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      cursor: "pointer",
-                      fontSize: "10px",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <FaPlus />
-                  </button>
-                )}
-              </div>
-              <div
-                style={{
-                  fontSize: "12px",
-                  color: "var(--secondary-color)",
-                  marginTop: "2px",
-                }}
-              >
-                {vente.telephoneClient} · {formatDate(vente.dateVente)}
-              </div>
-            </div>
-            <button
-              className={`status-badge ${getStatutClass(vente.statutLivraison)}`}
-              onClick={() =>
-                handleChangeStatut(vente._id, vente.statutLivraison)
-              }
-              style={{
-                cursor:
-                  vente.statutLivraison === "annulé"
-                    ? "not-allowed"
-                    : "pointer",
-                border: "none",
-                flexShrink: 0,
-                marginLeft: "8px",
-                opacity: vente.statutLivraison === "annulé" ? 0.6 : 1,
-              }}
-              disabled={vente.statutLivraison === "annulé"}
-            >
-              {getStatutLabel(vente.statutLivraison)}
-            </button>
-          </div>
-
-          {/* Ligne 2 : produit */}
-          <div
-            style={{
-              fontSize: "13px",
-              color: "var(--dark-color)",
-              marginBottom: "8px",
-            }}
-          >
-            {grouped ? (
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  color: "#1d4ed8",
-                  fontWeight: 600,
-                }}
-              >
-                <FaBoxOpen />
-                {vente.produits.length} produits
-              </span>
-            ) : (
-              <span>
-                {vente.nomProduit}
-                {vente.tailleProduit && (
-                  <span style={{ color: "var(--secondary-color)" }}>
-                    {" "}
-                    · {vente.tailleProduit}
-                  </span>
-                )}
-              </span>
-            )}
-          </div>
-
-          {/* Ligne 3 : montants */}
-          <div
-            style={{
-              display: "flex",
-              gap: "16px",
-              flexWrap: "wrap",
-              fontSize: "13px",
-              marginBottom: "10px",
-            }}
-          >
-            <span style={{ color: "var(--secondary-color)" }}>
-              Vente :{" "}
-              <strong style={{ color: "var(--dark-color)" }}>
-                {formatCurrency(vente.prixVente)}
-              </strong>
-            </span>
-            {vente.fraisLivraison > 0 && (
-              <span style={{ color: "var(--secondary-color)" }}>
-                Frais :{" "}
-                <strong style={{ color: "var(--dark-color)" }}>
-                  {formatCurrency(vente.fraisLivraison)}
-                </strong>
-              </span>
-            )}
-            <span style={{ color: "var(--secondary-color)" }}>
-              Total :{" "}
-              <strong
-                style={{ color: "var(--success-color)", fontSize: "14px" }}
-              >
-                {formatCurrency(vente.montantTotal)}
-              </strong>
-            </span>
-          </div>
-
-          {/* Ligne 4 : livreur + actions */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <div style={{ fontSize: "12px", color: "var(--secondary-color)" }}>
-              {vente.livreur ? (
-                <span>🚚 {vente.livreur.nom}</span>
-              ) : (
-                <span>Pas de livreur</span>
-              )}
-            </div>
-            <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-              {grouped && (
-                <button
-                  onClick={() => toggleExpand(vente._id)}
-                  style={{
-                    background: "#dbeafe",
-                    color: "#1d4ed8",
-                    border: "none",
-                    borderRadius: "6px",
-                    padding: "5px 8px",
-                    cursor: "pointer",
-                    fontSize: "12px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "4px",
-                  }}
-                >
-                  {expanded ? <FaChevronUp /> : <FaChevronDown />}
-                  {expanded ? "Masquer" : "Détails"}
-                </button>
-              )}
-              <Link
-                to={`/ventes/${vente._id}/edit`}
-                className="btn btn-sm btn-icon btn-secondary"
-                title="Modifier"
-              >
-                <FaEdit />
-              </Link>
-              {vente.statutLivraison !== "annulé" && (
-                <button
-                  className="btn btn-sm btn-icon btn-danger"
-                  onClick={() => handleAnnuler(vente._id)}
-                  title="Annuler"
-                >
-                  <FaBan />
-                </button>
-              )}
-              <button
-                className="btn btn-sm btn-icon btn-danger"
-                onClick={() => handleDelete(vente._id, vente.nomClient)}
-                title="Supprimer"
-              >
-                <FaTrash />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Sous-produits (vente groupée) */}
-        {grouped && expanded && (
-          <div
-            style={{
-              borderTop: "1px solid var(--border-color)",
-              background: "#f8fafc",
-            }}
-          >
-            {vente.produits.map((pe, idx) => (
-              <div
-                key={pe._id || idx}
-                style={{
-                  padding: "10px 16px",
-                  borderBottom:
-                    idx < vente.produits.length - 1
-                      ? "1px solid var(--border-color)"
-                      : "none",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: "13px", fontWeight: 600 }}>
-                    <span style={{ color: "#94a3b8", marginRight: "6px" }}>
-                      #{idx + 1}
-                    </span>
-                    {pe.nomProduit}
-                    {pe.tailleProduit && (
-                      <span
-                        style={{
-                          color: "var(--secondary-color)",
-                          fontWeight: 400,
-                        }}
-                      >
-                        {" "}
-                        · {pe.tailleProduit}
-                      </span>
-                    )}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "12px",
-                      color: "var(--secondary-color)",
-                      marginTop: "2px",
-                    }}
-                  >
-                    {formatCurrency(pe.prixVente)}
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: "6px" }}>
-                  {vente.statutLivraison !== "annulé" && (
-                    <button
-                      className="btn btn-sm btn-icon btn-secondary"
-                      onClick={() =>
-                        setModalModifier({ vente, produitEntry: pe })
-                      }
-                      title="Modifier"
-                    >
-                      <FaEdit />
-                    </button>
-                  )}
-                  {vente.produits.length > 1 &&
-                    vente.statutLivraison !== "annulé" && (
-                      <button
-                        className="btn btn-sm btn-icon btn-danger"
-                        onClick={() =>
-                          handleSupprimerProduit(
-                            vente._id,
-                            pe._id,
-                            pe.nomProduit,
-                          )
-                        }
-                        title="Retirer"
-                      >
-                        <FaTrash />
-                      </button>
-                    )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
   return (
     <div className="main-content">
-      {/* ── Header ──────────────────────────────────────────────────────────── */}
+      {/* ── Header ── */}
       <div className="page-header">
         <h1 className="page-title">Gestion des Ventes</h1>
         <Link to="/ventes/new" className="btn btn-primary">
@@ -1090,7 +1082,7 @@ const Ventes = () => {
         </Link>
       </div>
 
-      {/* ── Barre de filtres ─────────────────────────────────────────────── */}
+      {/* ── Barre de filtres ── */}
       <div
         style={{
           background: "white",
@@ -1103,7 +1095,6 @@ const Ventes = () => {
           gap: "10px",
         }}
       >
-        {/* Ligne 1 : statut + recherche */}
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
           <select
             className="form-select"
@@ -1140,7 +1131,6 @@ const Ventes = () => {
           />
         </div>
 
-        {/* Ligne 2 : boutons période + date */}
         <div
           style={{
             display: "flex",
@@ -1208,7 +1198,7 @@ const Ventes = () => {
         </div>
       </div>
 
-      {/* ── Bandeau résumé période ───────────────────────────────────────── */}
+      {/* ── Bandeau résumé période ── */}
       {filterPeriode !== "tous" && (
         <div
           style={{
@@ -1234,7 +1224,7 @@ const Ventes = () => {
         </div>
       )}
 
-      {/* ── Contenu : cartes mobile / tableau desktop ──────────────────── */}
+      {/* ── Contenu ── */}
       {filteredVentes.length === 0 ? (
         <div className="table-container">
           <p className="no-data">Aucune vente trouvée pour cette période</p>
@@ -1243,7 +1233,23 @@ const Ventes = () => {
         /* ── CARTES MOBILE ── */
         <div style={{ paddingBottom: "20px" }}>
           {filteredVentes.map((vente) => (
-            <VenteCard key={vente._id} vente={vente} />
+            <VenteCard
+              key={vente._id}
+              vente={vente}
+              expanded={expandedVentes.has(vente._id)}
+              onToggleExpand={toggleExpand}
+              onOpenModalVente={(v) => openModal(setModalVente, v)}
+              onOpenModalModifier={(data) => openModal(setModalModifier, data)}
+              onChangeStatut={handleChangeStatut}
+              onDelete={handleDelete}
+              onAnnuler={handleAnnuler}
+              onSupprimerProduit={handleSupprimerProduit}
+              formatCurrency={formatCurrency}
+              formatDate={formatDate}
+              getStatutClass={getStatutClass}
+              getStatutLabel={getStatutLabel}
+              isGroupee={isGroupee}
+            />
           ))}
         </div>
       ) : (
@@ -1311,7 +1317,7 @@ const Ventes = () => {
                           </div>
                           {canAdd && (
                             <button
-                              onClick={() => setModalVente(vente)}
+                              onClick={() => openModal(setModalVente, vente)}
                               title="Ajouter un produit"
                               style={{
                                 flexShrink: 0,
@@ -1455,7 +1461,7 @@ const Ventes = () => {
                                 <button
                                   className="btn btn-sm btn-icon btn-secondary"
                                   onClick={() =>
-                                    setModalModifier({
+                                    openModal(setModalModifier, {
                                       vente,
                                       produitEntry: pe,
                                     })
@@ -1496,14 +1502,14 @@ const Ventes = () => {
       {modalVente && (
         <AjouterProduitModal
           vente={modalVente}
-          onClose={() => setModalVente(null)}
+          onClose={() => closeModal(setModalVente)}
         />
       )}
       {modalModifier && (
         <ModifierProduitModal
           vente={modalModifier.vente}
           produitEntry={modalModifier.produitEntry}
-          onClose={() => setModalModifier(null)}
+          onClose={() => closeModal(setModalModifier)}
         />
       )}
     </div>
