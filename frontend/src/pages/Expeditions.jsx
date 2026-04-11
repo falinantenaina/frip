@@ -6,15 +6,11 @@ import {
   FaBan,
   FaBoxOpen,
   FaCalendarAlt,
-  FaChevronDown,
-  FaChevronUp,
   FaEdit,
   FaPlus,
   FaRocket,
   FaTimes,
   FaTrash,
-  FaTruck,
-  FaUser,
 } from "react-icons/fa";
 import { toast } from "react-toastify";
 import useAppStore from "../stores/appStore";
@@ -24,20 +20,12 @@ const DESTINATIONS = ["Antsirabe", "Local", "Autre"];
 
 const fmtAR = (n) => new Intl.NumberFormat("fr-FR").format(n || 0) + " AR";
 const fmtDate = (d) => format(new Date(d), "dd MMM yyyy", { locale: fr });
-const fmtDateCourt = (d) => format(new Date(d), "dd/MM/yyyy", { locale: fr });
 
 const statutConfig = {
   en_preparation: { label: "En préparation", bg: "#fef3c7", color: "#92400e" },
   expédiée: { label: "Expédiée", bg: "#dbeafe", color: "#1e40af" },
   livrée: { label: "Livrée", bg: "#d1fae5", color: "#065f46" },
   annulée: { label: "Annulée", bg: "#fee2e2", color: "#991b1b" },
-};
-
-const statutVenteConfig = {
-  en_attente: { label: "En attente", cls: "en_attente" },
-  en_cours: { label: "En cours", cls: "en_cours" },
-  livré: { label: "Livré", cls: "livre" },
-  annulé: { label: "Annulé", cls: "annule" },
 };
 
 // ── Modal Créer / Modifier expédition ────────────────────────────────────────
@@ -101,7 +89,7 @@ const ExpeditionModal = ({ expedition, onClose }) => {
                     marginLeft: 8,
                   }}
                 >
-                  Ex: Vague 112
+                  Ex: Vague 112, Produit Noël
                 </small>
               </label>
               <input
@@ -183,7 +171,7 @@ const ExpeditionModal = ({ expedition, onClose }) => {
   );
 };
 
-// ── Modal Expédier ───────────────────────────────────────────────────────────
+// ── Modal Expédier (saisir frais au moment d'expédier) ───────────────────────
 const ExpedierModal = ({ expedition, onClose }) => {
   const { expedierExpedition } = useAppStore();
   const [form, setForm] = useState({
@@ -196,6 +184,7 @@ const ExpedierModal = ({ expedition, onClose }) => {
       expedition?.pourcentageCommissionnaire?.toString() || "0",
   });
   const [loading, setLoading] = useState(false);
+
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
   const totalVentes = expedition?.totalVentes || 0;
@@ -273,6 +262,7 @@ const ExpedierModal = ({ expedition, onClose }) => {
                 required
               />
             </div>
+
             <div
               style={{
                 background: "var(--light-color)",
@@ -362,6 +352,8 @@ const ExpedierModal = ({ expedition, onClose }) => {
                 )}
               </div>
             </div>
+
+            {/* Bilan */}
             <div
               style={{
                 background: "#f0fdf4",
@@ -451,6 +443,7 @@ const ExpedierModal = ({ expedition, onClose }) => {
                 </span>
               </div>
             </div>
+
             <div className="modal-footer">
               <button
                 type="button"
@@ -588,6 +581,7 @@ const AjouterProduitsModal = ({ expedition, onClose }) => {
               </button>
             ))}
           </div>
+
           {mode === "ventes" ? (
             <div>
               <p
@@ -761,6 +755,7 @@ const AjouterProduitsModal = ({ expedition, onClose }) => {
               </button>
             </div>
           )}
+
           <div
             style={{
               display: "flex",
@@ -790,45 +785,78 @@ const AjouterProduitsModal = ({ expedition, onClose }) => {
   );
 };
 
-// ── Modal Annuler une vente depuis une expédition ────────────────────────────
-const AnnulerVenteModal = ({ expeditionId, vente, onClose }) => {
-  const [raison, setRaison] = useState("");
-  const [loading, setLoading] = useState(false);
+// ── Page principale ──────────────────────────────────────────────────────────
+// ── Modal Détail ventes d'une expédition ─────────────────────────────────────
+const VentesExpeditionModal = ({ expedition, onClose }) => {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!raison.trim()) {
-      toast.error("Veuillez saisir une raison");
-      return;
-    }
+  const loadDetail = async () => {
     setLoading(true);
     try {
-      await api.put(`/expeditions/${expeditionId}/annuler-vente/${vente._id}`, {
-        raisonAnnulation: raison,
-      });
-      toast.success(`Vente de ${vente.nomClient} annulée`);
-      onClose(true);
-    } catch (e) {
-      toast.error(e.response?.data?.message || "Erreur lors de l'annulation");
+      const r = await api.get(`/expeditions/${expedition._id}`);
+      setData(r.data.data);
+    } catch {
+      toast.error("Erreur de chargement");
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    loadDetail();
+  }, [expedition._id]);
+
+  const handleAnnulerVente = async (venteId, nomClient) => {
+    const raison = window.prompt(
+      `Annuler la commande de ${nomClient} ?\nRaison :`,
+    );
+    if (raison === null) return;
+    try {
+      await api.put(`/expeditions/${expedition._id}/annuler-vente/${venteId}`, {
+        raisonAnnulation: raison || "Annulée depuis expédition",
+      });
+      toast.success(`Commande de ${nomClient} annulée`);
+      loadDetail();
+    } catch (e) {
+      toast.error(e.response?.data?.message || "Erreur");
+    }
+  };
+
+  const getStatutClass = (s) =>
+    ({
+      en_attente: "en_attente",
+      en_cours: "en_cours",
+      livré: "livre",
+      annulé: "annule",
+    })[s] || "en_attente";
+  const getStatutLabel = (s) =>
+    ({
+      en_attente: "En attente",
+      en_cours: "En cours",
+      livré: "Livré",
+      annulé: "Annulé",
+    })[s] || s;
+
   return createPortal(
     <div
       className="modal-overlay"
-      onClick={() => onClose(false)}
+      onClick={() => onClose()}
       style={{ zIndex: 9999 }}
     >
       <div
         className="modal"
         onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: 440, width: "calc(100% - 24px)" }}
+        style={{
+          maxWidth: 780,
+          width: "calc(100% - 24px)",
+          maxHeight: "90vh",
+          overflowY: "auto",
+        }}
       >
         <div className="modal-header">
           <div>
-            <h3 className="modal-title">Annuler la vente</h3>
+            <h3 className="modal-title">👥 Ventes — {expedition.nom}</h3>
             <p
               style={{
                 fontSize: 13,
@@ -836,375 +864,190 @@ const AnnulerVenteModal = ({ expeditionId, vente, onClose }) => {
                 marginTop: 4,
               }}
             >
-              Client : <strong>{vente.nomClient}</strong>
+              {expedition.destination} · {fmtDate(expedition.dateExpedition)}
             </p>
           </div>
-          <button className="modal-close" onClick={() => onClose(false)}>
+          <button className="modal-close" onClick={() => onClose()}>
             <FaTimes />
           </button>
         </div>
         <div className="modal-body">
-          <div
-            style={{
-              background: "#fff7ed",
-              border: "1px solid #fed7aa",
-              borderRadius: 8,
-              padding: "10px 14px",
-              marginBottom: 16,
-              fontSize: 13,
-              color: "#92400e",
-            }}
-          >
-            ⚠️ Cette action annulera la vente et la retirera de l'expédition.
-            Les produits seront remis en stock.
-          </div>
-          <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label className="form-label">Raison de l'annulation *</label>
-              <textarea
-                className="form-textarea"
-                rows={3}
-                placeholder="Ex: Client a annulé sa commande..."
-                value={raison}
-                onChange={(e) => setRaison(e.target.value)}
-                required
-              />
+          {loading ? (
+            <div className="loading">
+              <div className="spinner"></div>
             </div>
-            <div className="modal-footer">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => onClose(false)}
+          ) : !data?.ventes?.length ? (
+            <p className="no-data">Aucune vente rattachée à cette expédition</p>
+          ) : (
+            data.ventes.map((vente) => (
+              <div
+                key={vente._id}
+                style={{
+                  border: "1px solid var(--border-color)",
+                  borderRadius: 10,
+                  marginBottom: 12,
+                  overflow: "hidden",
+                  opacity: vente.statutLivraison === "annulé" ? 0.55 : 1,
+                }}
               >
-                Retour
-              </button>
-              <button
-                type="submit"
-                className="btn btn-danger"
-                disabled={loading}
-              >
-                {loading ? (
-                  "Annulation..."
-                ) : (
-                  <>
-                    <FaBan /> Confirmer l'annulation
-                  </>
+                <div
+                  style={{
+                    background: "var(--light-color)",
+                    padding: "10px 14px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: 8,
+                  }}
+                >
+                  <div>
+                    <strong style={{ fontSize: 15 }}>{vente.nomClient}</strong>
+                    <span
+                      style={{
+                        color: "var(--secondary-color)",
+                        fontSize: 13,
+                        marginLeft: 10,
+                      }}
+                    >
+                      {vente.telephoneClient}
+                    </span>
+                    {vente.lieuLivraison && (
+                      <span
+                        style={{
+                          color: "var(--secondary-color)",
+                          fontSize: 12,
+                          marginLeft: 8,
+                        }}
+                      >
+                        📍 {vente.lieuLivraison}
+                      </span>
+                    )}
+                  </div>
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 10 }}
+                  >
+                    <strong
+                      style={{ color: "var(--success-color)", fontSize: 15 }}
+                    >
+                      {fmtAR(vente.prixVente)}
+                    </strong>
+                    <span
+                      className={`status-badge ${getStatutClass(vente.statutLivraison)}`}
+                    >
+                      {getStatutLabel(vente.statutLivraison)}
+                    </span>
+                    {vente.statutLivraison !== "annulé" && (
+                      <button
+                        className="btn btn-sm btn-danger"
+                        onClick={() =>
+                          handleAnnulerVente(vente._id, vente.nomClient)
+                        }
+                      >
+                        Annuler
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {(vente.produits?.length > 0
+                  ? vente.produits
+                  : [
+                      {
+                        nomProduit: vente.nomProduit,
+                        tailleProduit: vente.tailleProduit,
+                        prixVente: vente.prixVente,
+                      },
+                    ]
+                ).map((p, i) => (
+                  <div
+                    key={p._id || i}
+                    style={{
+                      padding: "8px 14px",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      borderTop: "1px solid var(--border-color)",
+                      fontSize: 13,
+                    }}
+                  >
+                    <span>
+                      <span style={{ color: "#94a3b8", marginRight: 8 }}>
+                        #{i + 1}
+                      </span>
+                      <strong>{p.nomProduit}</strong>
+                      {p.tailleProduit && (
+                        <span
+                          style={{
+                            color: "var(--secondary-color)",
+                            marginLeft: 6,
+                          }}
+                        >
+                          · {p.tailleProduit}
+                        </span>
+                      )}
+                    </span>
+                    <span
+                      style={{ color: "var(--success-color)", fontWeight: 600 }}
+                    >
+                      {fmtAR(p.prixVente)}
+                    </span>
+                  </div>
+                ))}
+                {vente.fraisLivraison > 0 && (
+                  <div
+                    style={{
+                      padding: "6px 14px",
+                      background: "#f8fafc",
+                      borderTop: "1px solid var(--border-color)",
+                      fontSize: 12,
+                      color: "var(--secondary-color)",
+                      display: "flex",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <span>Frais livraison</span>
+                    <span>{fmtAR(vente.fraisLivraison)}</span>
+                  </div>
                 )}
-              </button>
+              </div>
+            ))
+          )}
+          {data?.ventes?.length > 0 && (
+            <div
+              style={{
+                background: "var(--light-color)",
+                borderRadius: 8,
+                padding: "12px 14px",
+                borderTop: "2px solid var(--border-color)",
+                display: "flex",
+                gap: 24,
+                justifyContent: "flex-end",
+                flexWrap: "wrap",
+                fontSize: 13,
+                fontWeight: 700,
+              }}
+            >
+              <span>
+                CA actif :{" "}
+                <span style={{ color: "var(--success-color)" }}>
+                  {fmtAR(
+                    data.ventes
+                      .filter((v) => v.statutLivraison !== "annulé")
+                      .reduce((s, v) => s + v.prixVente, 0),
+                  )}
+                </span>
+              </span>
+              <span>
+                Total expédition :{" "}
+                <span style={{ color: "var(--primary-color)" }}>
+                  {fmtAR(data.expedition.totalVentes)}
+                </span>
+              </span>
             </div>
-          </form>
+          )}
         </div>
       </div>
     </div>,
     document.body,
-  );
-};
-
-// ── Sous-section : Ventes d'une expédition ───────────────────────────────────
-const VentesExpedition = ({ expedition, onRefresh }) => {
-  const [ventes, setVentes] = useState([]);
-  const [loadingVentes, setLoadingVentes] = useState(false);
-  const [venteAnnuler, setVenteAnnuler] = useState(null);
-
-  const fetchVentes = async () => {
-    setLoadingVentes(true);
-    try {
-      const res = await api.get(`/expeditions/${expedition._id}`);
-      setVentes(res.data.data.ventes || []);
-    } catch {
-      toast.error("Impossible de charger les ventes");
-    } finally {
-      setLoadingVentes(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchVentes();
-  }, [expedition._id]);
-
-  const isEnPrepa = expedition.statut === "en_preparation";
-
-  if (loadingVentes)
-    return (
-      <div style={{ padding: "20px 16px", textAlign: "center" }}>
-        <div
-          className="spinner"
-          style={{ width: 24, height: 24, borderWidth: 3, margin: "0 auto" }}
-        ></div>
-      </div>
-    );
-
-  if (ventes.length === 0)
-    return (
-      <div
-        style={{
-          padding: "16px",
-          textAlign: "center",
-          color: "var(--secondary-color)",
-          fontSize: 13,
-        }}
-      >
-        Aucune vente rattachée à cette expédition
-      </div>
-    );
-
-  return (
-    <div>
-      {/* En-tête section ventes */}
-      <div
-        style={{
-          padding: "10px 16px",
-          background: "#f0f9ff",
-          borderBottom: "1px solid var(--border-color)",
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          fontSize: 13,
-          fontWeight: 600,
-          color: "#1d4ed8",
-        }}
-      >
-        <FaUser style={{ fontSize: 11 }} />
-        {ventes.length} vente{ventes.length > 1 ? "s" : ""} rattachée
-        {ventes.length > 1 ? "s" : ""}
-        <span
-          style={{
-            marginLeft: "auto",
-            fontWeight: 400,
-            color: "var(--secondary-color)",
-          }}
-        >
-          Total :{" "}
-          <strong style={{ color: "var(--success-color)" }}>
-            {fmtAR(ventes.reduce((s, v) => s + (v.montantTotal || 0), 0))}
-          </strong>
-        </span>
-      </div>
-
-      {/* Liste des ventes — tableau desktop */}
-      <div className="desktop-only" style={{ overflowX: "auto" }}>
-        <table className="data-table" style={{ minWidth: 600 }}>
-          <thead>
-            <tr>
-              <th>Client</th>
-              <th>Produit(s)</th>
-              <th>Date</th>
-              <th>Livreur</th>
-              <th>Prix vente</th>
-              <th>Total</th>
-              <th>Statut</th>
-              {isEnPrepa && <th>Action</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {ventes.map((v) => {
-              const statCfg = statutVenteConfig[v.statutLivraison] || {
-                label: v.statutLivraison,
-                cls: "en_attente",
-              };
-              const isGrouped = v.produits && v.produits.length > 1;
-              return (
-                <tr
-                  key={v._id}
-                  style={{ opacity: v.statutLivraison === "annulé" ? 0.55 : 1 }}
-                >
-                  <td>
-                    <strong>{v.nomClient}</strong>
-                    <br />
-                    <small className="text-secondary">
-                      {v.telephoneClient}
-                    </small>
-                  </td>
-                  <td>
-                    {isGrouped ? (
-                      <span
-                        style={{
-                          color: "#1d4ed8",
-                          fontWeight: 600,
-                          fontSize: 13,
-                        }}
-                      >
-                        <FaBoxOpen style={{ marginRight: 4 }} />
-                        {v.produits.length} produits
-                      </span>
-                    ) : (
-                      <span>
-                        {v.nomProduit}
-                        {v.tailleProduit && (
-                          <small className="text-secondary">
-                            {" "}
-                            · {v.tailleProduit}
-                          </small>
-                        )}
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ fontSize: 13 }}>{fmtDateCourt(v.dateVente)}</td>
-                  <td style={{ fontSize: 13 }}>
-                    {v.livreur ? (
-                      <span>
-                        <FaTruck style={{ marginRight: 4, fontSize: 11 }} />
-                        {v.livreur.nom}
-                      </span>
-                    ) : (
-                      <span className="text-secondary">—</span>
-                    )}
-                  </td>
-                  <td style={{ fontSize: 13 }}>{fmtAR(v.prixVente)}</td>
-                  <td>
-                    <strong className="text-success">
-                      {fmtAR(v.montantTotal)}
-                    </strong>
-                  </td>
-                  <td>
-                    <span className={`status-badge ${statCfg.cls}`}>
-                      {statCfg.label}
-                    </span>
-                  </td>
-                  {isEnPrepa && (
-                    <td>
-                      {v.statutLivraison !== "annulé" && (
-                        <button
-                          className="btn btn-sm btn-danger"
-                          onClick={() => setVenteAnnuler(v)}
-                          title="Annuler cette vente"
-                        >
-                          <FaBan /> Annuler
-                        </button>
-                      )}
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Liste des ventes — cartes mobile */}
-      <div className="mobile-only">
-        {ventes.map((v) => {
-          const statCfg = statutVenteConfig[v.statutLivraison] || {
-            label: v.statutLivraison,
-            cls: "en_attente",
-          };
-          const isGrouped = v.produits && v.produits.length > 1;
-          return (
-            <div
-              key={v._id}
-              style={{
-                margin: "0 0 0 0",
-                padding: "10px 14px",
-                borderBottom: "1px solid var(--border-color)",
-                opacity: v.statutLivraison === "annulé" ? 0.55 : 1,
-                background: "white",
-              }}
-            >
-              {/* Ligne 1 : client + statut */}
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "flex-start",
-                  marginBottom: 4,
-                }}
-              >
-                <div>
-                  <strong style={{ fontSize: 14 }}>{v.nomClient}</strong>
-                  <div
-                    style={{ fontSize: 11, color: "var(--secondary-color)" }}
-                  >
-                    {v.telephoneClient} · {fmtDateCourt(v.dateVente)}
-                  </div>
-                </div>
-                <span
-                  className={`status-badge ${statCfg.cls}`}
-                  style={{
-                    fontSize: 11,
-                    padding: "2px 8px",
-                    flexShrink: 0,
-                    marginLeft: 8,
-                  }}
-                >
-                  {statCfg.label}
-                </span>
-              </div>
-              {/* Ligne 2 : produit */}
-              <div style={{ fontSize: 13, marginBottom: 4 }}>
-                {isGrouped ? (
-                  <span style={{ color: "#1d4ed8", fontWeight: 600 }}>
-                    <FaBoxOpen style={{ marginRight: 4 }} />
-                    {v.produits.length} produits
-                  </span>
-                ) : (
-                  <span>
-                    {v.nomProduit}
-                    {v.tailleProduit && (
-                      <span className="text-secondary">
-                        {" "}
-                        · {v.tailleProduit}
-                      </span>
-                    )}
-                  </span>
-                )}
-              </div>
-              {/* Ligne 3 : montants + livreur + action */}
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  flexWrap: "wrap",
-                  gap: 6,
-                }}
-              >
-                <div style={{ fontSize: 12, color: "var(--secondary-color)" }}>
-                  Vente :{" "}
-                  <strong style={{ color: "var(--dark-color)" }}>
-                    {fmtAR(v.prixVente)}
-                  </strong>
-                  <span style={{ margin: "0 6px" }}>·</span>
-                  Total :{" "}
-                  <strong style={{ color: "var(--success-color)" }}>
-                    {fmtAR(v.montantTotal)}
-                  </strong>
-                  {v.livreur && (
-                    <span>
-                      {" "}
-                      · <FaTruck style={{ fontSize: 10 }} /> {v.livreur.nom}
-                    </span>
-                  )}
-                </div>
-                {isEnPrepa && v.statutLivraison !== "annulé" && (
-                  <button
-                    className="btn btn-sm btn-danger"
-                    onClick={() => setVenteAnnuler(v)}
-                    style={{ fontSize: 11, padding: "3px 8px" }}
-                  >
-                    <FaBan /> Annuler
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Modal annulation */}
-      {venteAnnuler && (
-        <AnnulerVenteModal
-          expeditionId={expedition._id}
-          vente={venteAnnuler}
-          onClose={(did) => {
-            setVenteAnnuler(null);
-            if (did) {
-              fetchVentes();
-              onRefresh();
-            }
-          }}
-        />
-      )}
-    </div>
   );
 };
 
@@ -1216,8 +1059,10 @@ const Expeditions = () => {
   const [editing, setEditing] = useState(null);
   const [expedierModal, setExpedierModal] = useState(null);
   const [addingTo, setAddingTo] = useState(null);
-  const [expanded, setExpanded] = useState(new Set()); // produits
-  const [expandedVentes, setExpandedVentes] = useState(new Set()); // ventes
+  const [ventesModal, setVentesModal] = useState(null);
+  const [expanded, setExpanded] = useState(new Set());
+  const [expandedVentes, setExpandedVentes] = useState(new Set());
+  const [ventesMap, setVentesMap] = useState({});
   const [filterStatut, setFilterStatut] = useState("");
 
   useEffect(() => {
@@ -1240,12 +1085,45 @@ const Expeditions = () => {
       n.has(id) ? n.delete(id) : n.add(id);
       return n;
     });
-  const toggleVentes = (id) =>
+
+  // Charger les ventes d'une expédition au clic sur "Ventes"
+  const toggleVentesExpedition = async (expId) => {
     setExpandedVentes((p) => {
       const n = new Set(p);
-      n.has(id) ? n.delete(id) : n.add(id);
+      if (n.has(expId)) {
+        n.delete(expId);
+        return n;
+      }
+      n.add(expId);
       return n;
     });
+    if (!ventesMap[expId]) {
+      try {
+        const res = await api.get(`/expeditions/${expId}`);
+        setVentesMap((p) => ({ ...p, [expId]: res.data.data.ventes }));
+      } catch {
+        toast.error("Erreur chargement ventes");
+      }
+    }
+  };
+
+  const handleAnnulerVenteExpedition = async (expId, venteId, nomClient) => {
+    const raison = prompt(`Annuler la vente de ${nomClient} ? Raison :`);
+    if (!raison) return;
+    try {
+      const res = await api.put(
+        `/expeditions/${expId}/annuler-vente/${venteId}`,
+        { raisonAnnulation: raison },
+      );
+      if (res.data.success) {
+        toast.success("Vente annulée et retirée de l'expédition ✅");
+        setVentesMap((p) => ({ ...p, [expId]: res.data.data.ventes }));
+        fetchExpeditions({}, true);
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.message || "Erreur");
+    }
+  };
 
   const filtered = expeditions.filter(
     (e) => !filterStatut || e.statut === filterStatut,
@@ -1271,13 +1149,6 @@ const Expeditions = () => {
 
   return (
     <div className="main-content">
-      {/* Responsive helpers */}
-      <style>{`
-        @media (min-width: 769px) { .mobile-only { display: none !important; } }
-        @media (max-width: 768px)  { .desktop-only { display: none !important; } }
-      `}</style>
-
-      {/* Header */}
       <div className="page-header">
         <div>
           <h1 className="page-title">Expéditions</h1>
@@ -1351,8 +1222,7 @@ const Expeditions = () => {
       ) : (
         filtered.map((exp) => {
           const cfg = statutConfig[exp.statut] || {};
-          const isProdExpanded = expanded.has(exp._id);
-          const isVentesExpanded = expandedVentes.has(exp._id);
+          const isExpanded = expanded.has(exp._id);
           const isEnPrepa = exp.statut === "en_preparation";
 
           return (
@@ -1369,7 +1239,7 @@ const Expeditions = () => {
                   : "4px solid var(--primary-color)",
               }}
             >
-              {/* ── Header expédition ── */}
+              {/* Header */}
               <div style={{ padding: "14px 16px" }}>
                 <div
                   style={{
@@ -1380,7 +1250,7 @@ const Expeditions = () => {
                     gap: 10,
                   }}
                 >
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ flex: 1 }}>
                     <div
                       style={{
                         display: "flex",
@@ -1422,14 +1292,13 @@ const Expeditions = () => {
                       }}
                     >
                       <FaCalendarAlt style={{ marginRight: 4 }} />
-                      {fmtDate(exp.dateExpedition)}
-                      {" · "}
+                      {fmtDate(exp.dateExpedition)} ·{" "}
                       {exp.produits?.length || 0} produit(s)
                       {exp.notes && <span> · 📝 {exp.notes}</span>}
                     </div>
                   </div>
 
-                  {/* Montants */}
+                  {/* Montants — masqués si en préparation */}
                   <div
                     style={{
                       display: "flex",
@@ -1537,37 +1406,23 @@ const Expeditions = () => {
                   </div>
 
                   {/* Actions */}
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 6,
-                      flexShrink: 0,
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    {/* Bouton ventes */}
-                    <button
-                      onClick={() => toggleVentes(exp._id)}
-                      className="btn btn-sm btn-secondary"
-                      title="Voir les ventes rattachées"
-                      style={{ display: "flex", alignItems: "center", gap: 4 }}
-                    >
-                      <FaUser style={{ fontSize: 11 }} />
-                      {isVentesExpanded ? (
-                        <FaChevronUp style={{ fontSize: 10 }} />
-                      ) : (
-                        <FaChevronDown style={{ fontSize: 10 }} />
-                      )}
-                    </button>
-                    {/* Bouton produits */}
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                     {exp.produits?.length > 0 && (
                       <button
                         onClick={() => toggleExpand(exp._id)}
                         className="btn btn-sm btn-secondary"
                       >
-                        {isProdExpanded ? "▲" : "▼"} ({exp.produits.length})
+                        {isExpanded ? "▲" : "▼"} ({exp.produits.length})
                       </button>
                     )}
+                    <button
+                      onClick={() => setVentesModal(exp)}
+                      className="btn btn-sm btn-secondary"
+                      style={{ color: "#1d4ed8", fontWeight: 600 }}
+                      title="Voir les ventes rattachées"
+                    >
+                      👥 Ventes
+                    </button>
                     {isEnPrepa && (
                       <button
                         onClick={() => setAddingTo(exp)}
@@ -1584,8 +1439,7 @@ const Expeditions = () => {
                         style={{ background: "#7c3aed", gap: 6 }}
                         title="Marquer comme expédiée"
                       >
-                        <FaRocket />{" "}
-                        <span className="desktop-only">Expédier</span>
+                        <FaRocket /> Expédier
                       </button>
                     )}
                     <button
@@ -1609,27 +1463,15 @@ const Expeditions = () => {
                 </div>
               </div>
 
-              {/* ── Section ventes rattachées ── */}
-              {isVentesExpanded && (
-                <div style={{ borderTop: "1px solid var(--border-color)" }}>
-                  <VentesExpedition
-                    expedition={exp}
-                    onRefresh={() => fetchExpeditions({}, true)}
-                  />
-                </div>
-              )}
-
-              {/* ── Détail produits ── */}
-              {isProdExpanded && exp.produits && exp.produits.length > 0 && (
+              {/* Détail produits */}
+              {isExpanded && exp.produits && exp.produits.length > 0 && (
                 <div
                   style={{
                     borderTop: "1px solid var(--border-color)",
                     background: "#f8fafc",
                   }}
                 >
-                  {/* En-tête colonnes — desktop */}
                   <div
-                    className="desktop-only"
                     style={{
                       padding: "8px 16px",
                       display: "grid",
@@ -1653,78 +1495,34 @@ const Expeditions = () => {
                       key={p._id || idx}
                       style={{
                         padding: "8px 16px",
+                        display: "grid",
+                        gridTemplateColumns: "30px 1fr 80px 110px",
+                        gap: 8,
+                        fontSize: 13,
                         borderBottom:
                           idx < exp.produits.length - 1
                             ? "1px solid var(--border-color)"
                             : "none",
-                        fontSize: 13,
                       }}
                     >
-                      {/* Desktop */}
-                      <div
-                        className="desktop-only"
+                      <span style={{ color: "#94a3b8" }}>{idx + 1}</span>
+                      <span>
+                        <strong>{p.nomProduit}</strong>
+                      </span>
+                      <span style={{ color: "var(--secondary-color)" }}>
+                        {p.tailleProduit || "—"}
+                      </span>
+                      <span
                         style={{
-                          display: "grid",
-                          gridTemplateColumns: "30px 1fr 80px 110px",
-                          gap: 8,
+                          textAlign: "right",
+                          color: "var(--success-color)",
+                          fontWeight: 600,
                         }}
                       >
-                        <span style={{ color: "#94a3b8" }}>{idx + 1}</span>
-                        <span>
-                          <strong>{p.nomProduit}</strong>
-                        </span>
-                        <span style={{ color: "var(--secondary-color)" }}>
-                          {p.tailleProduit || "—"}
-                        </span>
-                        <span
-                          style={{
-                            textAlign: "right",
-                            color: "var(--success-color)",
-                            fontWeight: 600,
-                          }}
-                        >
-                          {fmtAR(p.prixVente)}
-                        </span>
-                      </div>
-                      {/* Mobile */}
-                      <div
-                        className="mobile-only"
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                        }}
-                      >
-                        <span>
-                          <span
-                            style={{
-                              color: "#94a3b8",
-                              marginRight: 6,
-                              fontSize: 11,
-                            }}
-                          >
-                            #{idx + 1}
-                          </span>
-                          <strong>{p.nomProduit}</strong>
-                          {p.tailleProduit && (
-                            <span style={{ color: "var(--secondary-color)" }}>
-                              {" "}
-                              · {p.tailleProduit}
-                            </span>
-                          )}
-                        </span>
-                        <span
-                          style={{
-                            color: "var(--success-color)",
-                            fontWeight: 600,
-                          }}
-                        >
-                          {fmtAR(p.prixVente)}
-                        </span>
-                      </div>
+                        {fmtAR(p.prixVente)}
+                      </span>
                     </div>
                   ))}
-                  {/* Pied de tableau */}
                   <div
                     style={{
                       padding: "10px 16px",
@@ -1734,7 +1532,6 @@ const Expeditions = () => {
                       fontSize: 13,
                       borderTop: "2px solid var(--border-color)",
                       fontWeight: 700,
-                      flexWrap: "wrap",
                     }}
                   >
                     <span>
@@ -1769,6 +1566,204 @@ const Expeditions = () => {
                   </div>
                 </div>
               )}
+
+              {/* Liste des ventes rattachées */}
+              {expandedVentes.has(exp._id) && (
+                <div
+                  style={{
+                    borderTop: "2px solid #bfdbfe",
+                    background: "#f0f9ff",
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: "10px 16px",
+                      fontWeight: 700,
+                      fontSize: 13,
+                      color: "#1d4ed8",
+                      borderBottom: "1px solid #bfdbfe",
+                    }}
+                  >
+                    📋 Ventes rattachées à cette expédition
+                  </div>
+                  {!ventesMap[exp._id] ? (
+                    <div
+                      style={{
+                        padding: 20,
+                        textAlign: "center",
+                        color: "var(--secondary-color)",
+                      }}
+                    >
+                      <div
+                        className="spinner"
+                        style={{ margin: "0 auto" }}
+                      ></div>
+                    </div>
+                  ) : ventesMap[exp._id].length === 0 ? (
+                    <p
+                      style={{
+                        padding: 16,
+                        color: "var(--secondary-color)",
+                        fontSize: 13,
+                      }}
+                    >
+                      Aucune vente rattachée
+                    </p>
+                  ) : (
+                    ventesMap[exp._id].map((v) => (
+                      <div
+                        key={v._id}
+                        style={{
+                          padding: "12px 16px",
+                          borderBottom: "1px solid #bfdbfe",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "flex-start",
+                          flexWrap: "wrap",
+                          gap: 10,
+                        }}
+                      >
+                        <div style={{ flex: 1 }}>
+                          {/* Client */}
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                              marginBottom: 4,
+                            }}
+                          >
+                            <strong style={{ fontSize: 14 }}>
+                              {v.nomClient}
+                            </strong>
+                            <span
+                              style={{
+                                fontSize: 12,
+                                color: "var(--secondary-color)",
+                              }}
+                            >
+                              {v.telephoneClient}
+                            </span>
+                            <span
+                              style={{
+                                padding: "1px 8px",
+                                borderRadius: 12,
+                                fontSize: 11,
+                                fontWeight: 600,
+                                background:
+                                  v.statutLivraison === "annulé"
+                                    ? "#fee2e2"
+                                    : v.statutLivraison === "livré"
+                                      ? "#d1fae5"
+                                      : "#fef3c7",
+                                color:
+                                  v.statutLivraison === "annulé"
+                                    ? "#991b1b"
+                                    : v.statutLivraison === "livré"
+                                      ? "#065f46"
+                                      : "#92400e",
+                              }}
+                            >
+                              {v.statutLivraison}
+                            </span>
+                          </div>
+                          {/* Produits */}
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color: "var(--secondary-color)",
+                              marginBottom: 2,
+                            }}
+                          >
+                            {v.produits && v.produits.length > 1 ? (
+                              v.produits.map((p, i) => (
+                                <span key={p._id} style={{ marginRight: 12 }}>
+                                  {i + 1}. {p.nomProduit}
+                                  {p.tailleProduit
+                                    ? ` (${p.tailleProduit})`
+                                    : ""}{" "}
+                                  — {fmtAR(p.prixVente)}
+                                </span>
+                              ))
+                            ) : (
+                              <span>
+                                {v.nomProduit}
+                                {v.tailleProduit ? ` (${v.tailleProduit})` : ""}
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: 12 }}>
+                            <span style={{ color: "var(--secondary-color)" }}>
+                              Lieu : {v.lieuLivraison}
+                            </span>
+                            {v.livreur && (
+                              <span
+                                style={{
+                                  color: "var(--secondary-color)",
+                                  marginLeft: 12,
+                                }}
+                              >
+                                🚚 {v.livreur.nom}
+                              </span>
+                            )}
+                            <span
+                              style={{
+                                marginLeft: 12,
+                                fontWeight: 700,
+                                color: "var(--success-color)",
+                              }}
+                            >
+                              {fmtAR(v.prixVente)}
+                            </span>
+                          </div>
+                        </div>
+                        {/* Actions vente */}
+                        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                          {v.statutLivraison !== "annulé" && (
+                            <button
+                              onClick={() =>
+                                handleAnnulerVenteExpedition(
+                                  exp._id,
+                                  v._id,
+                                  v.nomClient,
+                                )
+                              }
+                              className="btn btn-sm btn-danger"
+                              title="Annuler cette vente et la retirer de l'expédition"
+                              style={{ fontSize: 12 }}
+                            >
+                              <FaBan /> Annuler
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  {ventesMap[exp._id] && ventesMap[exp._id].length > 0 && (
+                    <div
+                      style={{
+                        padding: "8px 16px",
+                        fontSize: 13,
+                        color: "#1d4ed8",
+                        fontWeight: 600,
+                        borderTop: "1px solid #bfdbfe",
+                      }}
+                    >
+                      {
+                        ventesMap[exp._id].filter(
+                          (v) => v.statutLivraison !== "annulé",
+                        ).length
+                      }{" "}
+                      vente(s) active(s) · Total CA :{" "}
+                      {fmtAR(
+                        ventesMap[exp._id]
+                          .filter((v) => v.statutLivraison !== "annulé")
+                          .reduce((s, v) => s + v.prixVente, 0),
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           );
         })
@@ -1799,6 +1794,15 @@ const Expeditions = () => {
           onClose={(did) => {
             setAddingTo(null);
             refresh(did);
+          }}
+        />
+      )}
+      {ventesModal && (
+        <VentesExpeditionModal
+          expedition={ventesModal}
+          onClose={() => {
+            setVentesModal(null);
+            fetchExpeditions({}, true);
           }}
         />
       )}

@@ -241,12 +241,10 @@ export const createVente = async (req, res, next) => {
           .status(404)
           .json({ success: false, message: "Produit non trouvé" });
       if (produitDoc.statut !== "disponible") {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Ce produit n'est plus disponible",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Ce produit n'est plus disponible",
+        });
       }
       produitDoc.statut = "vendu";
       await produitDoc.save();
@@ -346,12 +344,10 @@ export const ajouterProduitVente = async (req, res, next) => {
         .status(404)
         .json({ success: false, message: "Vente non trouvée" });
     if (vente.statutLivraison === "annulé") {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Impossible d'ajouter un produit à une vente annulée",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Impossible d'ajouter un produit à une vente annulée",
+      });
     }
 
     const { produit, nomProduit, tailleProduit, prixVente } = req.body;
@@ -364,12 +360,10 @@ export const ajouterProduitVente = async (req, res, next) => {
           .status(404)
           .json({ success: false, message: "Produit non trouvé" });
       if (produitDoc.statut !== "disponible") {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Ce produit n'est plus disponible",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Ce produit n'est plus disponible",
+        });
       }
       produitDoc.statut = "vendu";
       await produitDoc.save();
@@ -423,12 +417,10 @@ export const supprimerProduitVente = async (req, res, next) => {
       (p) => p._id.toString() === req.params.produitEntryId,
     );
     if (entryIndex === -1) {
-      return res
-        .status(404)
-        .json({
-          success: false,
-          message: "Produit non trouvé dans cette vente",
-        });
+      return res.status(404).json({
+        success: false,
+        message: "Produit non trouvé dans cette vente",
+      });
     }
 
     const entry = vente.produits[entryIndex];
@@ -662,6 +654,7 @@ export const modifierProduitVente = async (req, res) => {
       nomProduit,
       tailleProduit,
       prixVente,
+      prixAchat,
       produit: produitRef,
     } = req.body;
 
@@ -671,21 +664,17 @@ export const modifierProduitVente = async (req, res) => {
         .status(404)
         .json({ success: false, message: "Vente non trouvée" });
     if (vente.statutLivraison === "annulé")
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Impossible de modifier une vente annulée",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Impossible de modifier une vente annulée",
+      });
 
     const produitEntry = vente.produits.id(produitEntryId);
     if (!produitEntry)
-      return res
-        .status(404)
-        .json({
-          success: false,
-          message: "Produit non trouvé dans cette vente",
-        });
+      return res.status(404).json({
+        success: false,
+        message: "Produit non trouvé dans cette vente",
+      });
 
     const ancienPrix = produitEntry.prixVente;
 
@@ -727,6 +716,7 @@ export const modifierProduitVente = async (req, res) => {
     if (nomProduit !== undefined) produitEntry.nomProduit = nomProduit;
     if (tailleProduit !== undefined) produitEntry.tailleProduit = tailleProduit;
     if (prixVente !== undefined) produitEntry.prixVente = prixVente;
+    if (prixAchat !== undefined) produitEntry.prixAchat = prixAchat;
 
     await vente.save();
 
@@ -735,13 +725,11 @@ export const modifierProduitVente = async (req, res) => {
 
     await vente.populate("balle livreur produits.produit");
 
-    res
-      .status(200)
-      .json({
-        success: true,
-        message: "Produit modifié avec succès",
-        data: vente,
-      });
+    res.status(200).json({
+      success: true,
+      message: "Produit modifié avec succès",
+      data: vente,
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

@@ -1,6 +1,5 @@
 import mongoose from "mongoose";
 
-// Sous-schema pour chaque produit dans une expédition
 const produitExpeditionSchema = new mongoose.Schema(
   {
     vente: { type: mongoose.Schema.Types.ObjectId, ref: "Vente" },
@@ -8,125 +7,130 @@ const produitExpeditionSchema = new mongoose.Schema(
     tailleProduit: { type: String },
     prixVente: { type: Number, required: true, min: 0 },
   },
-  { _id: true }
+  { _id: true },
 );
 
 const expeditionSchema = new mongoose.Schema(
   {
-    // Nom de l'expédition ex: "Vague 112", "Produit Noël"
     nom: {
       type: String,
       required: [true, "Le nom de l'expédition est requis"],
       trim: true,
     },
-
-    // Destination principale : Antsirabe ou autre
     destination: {
       type: String,
       required: [true, "La destination est requise"],
       trim: true,
       default: "Antsirabe",
     },
-
-    // Date d'expédition
     dateExpedition: {
       type: Date,
       default: Date.now,
     },
-
-    // Produits expédiés (liens vers ventes ou saisie manuelle)
     produits: [produitExpeditionSchema],
-
-    // Frais colis (transport/emballage de l'expédition)
     fraisColis: {
       type: Number,
       default: 0,
       min: 0,
     },
-
-    // Salaire commissionnaire
     salaireCommissionnaire: {
       type: Number,
       default: 0,
       min: 0,
     },
-
-    // Mode calcul commissionnaire
     modeCommissionnaire: {
       type: String,
       enum: ["fixe", "pourcentage"],
       default: "fixe",
     },
-
-    // Si pourcentage : % sur le prix de vente total
     pourcentageCommissionnaire: {
       type: Number,
       default: 0,
       min: 0,
       max: 100,
     },
-
-    // Total des frais de cette expédition
     totalFrais: {
       type: Number,
       default: 0,
     },
-
-    // Total ventes expédiées
     totalVentes: {
       type: Number,
       default: 0,
     },
-
-    // Statut
     statut: {
       type: String,
       enum: ["en_preparation", "expédiée", "livrée", "annulée"],
       default: "en_preparation",
     },
-
     notes: { type: String, trim: true },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-// Calculer les totaux avant sauvegarde (create / save)
-expeditionSchema.pre("save", function () {
-  this.totalVentes = this.produits.reduce((sum, p) => sum + p.prixVente, 0);
+// ── Méthode utilitaire de recalcul (réutilisable) ────────────────────────────
+expeditionSchema.methods.recalculer = function () {
+  // 1. Total ventes depuis les produits
+  this.totalVentes = this.produits.reduce(
+    (sum, p) => sum + (p.prixVente || 0),
+    0,
+  );
+
+  // 2. Salaire commissionnaire selon le mode
   if (this.modeCommissionnaire === "pourcentage") {
     this.salaireCommissionnaire =
-      (this.totalVentes * this.pourcentageCommissionnaire) / 100;
+      (this.totalVentes * (this.pourcentageCommissionnaire || 0)) / 100;
   }
-  this.totalFrais = this.fraisColis + this.salaireCommissionnaire;
+
+  // 3. Total frais
+  this.totalFrais = (this.fraisColis || 0) + (this.salaireCommissionnaire || 0);
+};
+
+// ── Hook pre('save') — déclenché par .save() ─────────────────────────────────
+expeditionSchema.pre("save", function () {
+  this.recalculer();
 });
 
-// Recalculer aussi lors de findOneAndUpdate (PUT)
+// ── Hook pre findOneAndUpdate — déclenché par findByIdAndUpdate ──────────────
+// IMPORTANT : on récupère le doc complet pour recalculer correctement
 expeditionSchema.pre(["findOneAndUpdate", "updateOne"], async function () {
   const update = this.getUpdate();
-  // Récupérer le doc actuel pour connaître les produits et valeurs non modifiées
   const doc = await this.model.findOne(this.getFilter()).lean();
   if (!doc) return;
 
+  // Fusionner les champs modifiés avec le doc existant
   const fraisColis =
-    update.fraisColis !== undefined ? update.fraisColis : doc.fraisColis;
+    update.fraisColis !== undefined
+      ? Number(update.fraisColis)
+      : doc.fraisColis || 0;
   const modeCommissionnaire =
     update.modeCommissionnaire !== undefined
       ? update.modeCommissionnaire
       : doc.modeCommissionnaire;
   const pourcentage =
     update.pourcentageCommissionnaire !== undefined
-      ? update.pourcentageCommissionnaire
-      : doc.pourcentageCommissionnaire;
+      ? Number(update.pourcentageCommissionnaire)
+      : doc.pourcentageCommissionnaire || 0;
+
+  // totalVentes : recalculer depuis les produits (doc existant, les produits ne changent pas via update direct)
+  const produits =
+    update.produits !== undefined ? update.produits : doc.produits;
+  const totalVentes = (produits || []).reduce(
+    (sum, p) => sum + (p.prixVente || 0),
+    0,
+  );
+
+  // Recalcul salaire si mode pourcentage
   let salaire =
     update.salaireCommissionnaire !== undefined
-      ? update.salaireCommissionnaire
-      : doc.salaireCommissionnaire;
-  const totalVentes = doc.totalVentes; // produits non modifiés ici
+      ? Number(update.salaireCommissionnaire)
+      : doc.salaireCommissionnaire || 0;
 
   if (modeCommissionnaire === "pourcentage") {
     salaire = (totalVentes * pourcentage) / 100;
     update.salaireCommissionnaire = salaire;
   }
+
+  update.totalVentes = totalVentes;
   update.totalFrais = fraisColis + salaire;
   this.setUpdate(update);
 });

@@ -3,7 +3,6 @@ import Vente from "../models/vente.model.js";
 
 // @desc    Obtenir toutes les expéditions
 // @route   GET /api/expeditions
-// @access  Private
 export const getExpeditions = async (req, res, next) => {
   try {
     const { statut, destination, dateDebut, dateFin } = req.query;
@@ -38,7 +37,6 @@ export const getExpeditions = async (req, res, next) => {
 
 // @desc    Obtenir une expédition avec le détail complet des ventes
 // @route   GET /api/expeditions/:id
-// @access  Private
 export const getExpedition = async (req, res, next) => {
   try {
     const expedition = await Expedition.findById(req.params.id);
@@ -49,14 +47,21 @@ export const getExpedition = async (req, res, next) => {
         .json({ success: false, message: "Expédition non trouvée" });
     }
 
-    // Récupérer toutes les ventes rattachées à cette expédition
-    const ventes = await Vente.find({ expedition: expedition._id })
+    // Extraire les IDs de ventes uniques depuis les produits de l'expédition
+    // (plus fiable que vente.expedition qui peut ne pas être mis à jour)
+    const venteIds = [
+      ...new Set(
+        expedition.produits
+          .filter((p) => p.vente)
+          .map((p) => p.vente.toString()),
+      ),
+    ];
+
+    const ventes = await Vente.find({ _id: { $in: venteIds } })
       .populate("balle", "nom numero")
       .populate("produits.produit")
       .populate("livreur", "nom telephone")
       .sort({ dateVente: -1 });
-
-    console.log(ventes);
 
     res.status(200).json({ success: true, data: { expedition, ventes } });
   } catch (error) {
@@ -66,10 +71,10 @@ export const getExpedition = async (req, res, next) => {
 
 // @desc    Créer une expédition
 // @route   POST /api/expeditions
-// @access  Private (Admin)
 export const createExpedition = async (req, res, next) => {
   try {
-    const expedition = await Expedition.create(req.body);
+    const expedition = new Expedition(req.body);
+    await expedition.save(); // pre-save recalcule tout
     res.status(201).json({ success: true, data: expedition });
   } catch (error) {
     next(error);
@@ -78,20 +83,33 @@ export const createExpedition = async (req, res, next) => {
 
 // @desc    Mettre à jour une expédition
 // @route   PUT /api/expeditions/:id
-// @access  Private (Admin)
+// FIX : utiliser .save() pour déclencher le recalcul complet via pre-save
 export const updateExpedition = async (req, res, next) => {
   try {
-    let expedition = await Expedition.findById(req.params.id);
+    const expedition = await Expedition.findById(req.params.id);
     if (!expedition) {
       return res
         .status(404)
         .json({ success: false, message: "Expédition non trouvée" });
     }
 
-    expedition = await Expedition.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true,
+    // Appliquer les champs modifiables
+    const fields = [
+      "nom",
+      "destination",
+      "dateExpedition",
+      "statut",
+      "notes",
+      "fraisColis",
+      "modeCommissionnaire",
+      "pourcentageCommissionnaire",
+      "salaireCommissionnaire",
+    ];
+    fields.forEach((f) => {
+      if (req.body[f] !== undefined) expedition[f] = req.body[f];
     });
+
+    await expedition.save(); // recalcule totalVentes, salaireCommissionnaire, totalFrais
 
     res.status(200).json({ success: true, data: expedition });
   } catch (error) {
@@ -101,7 +119,6 @@ export const updateExpedition = async (req, res, next) => {
 
 // @desc    Supprimer une expédition
 // @route   DELETE /api/expeditions/:id
-// @access  Private (Admin)
 export const deleteExpedition = async (req, res, next) => {
   try {
     const expedition = await Expedition.findById(req.params.id);
@@ -119,7 +136,6 @@ export const deleteExpedition = async (req, res, next) => {
 
 // @desc    Ajouter des produits/ventes à une expédition
 // @route   POST /api/expeditions/:id/produits
-// @access  Private (Admin)
 export const ajouterProduitsExpedition = async (req, res, next) => {
   try {
     const expedition = await Expedition.findById(req.params.id);
@@ -129,7 +145,7 @@ export const ajouterProduitsExpedition = async (req, res, next) => {
         .json({ success: false, message: "Expédition non trouvée" });
     }
 
-    const { produits } = req.body; // array de { vente?, nomProduit, tailleProduit, prixVente }
+    const { produits } = req.body;
     if (!produits || !Array.isArray(produits)) {
       return res
         .status(400)
@@ -137,7 +153,18 @@ export const ajouterProduitsExpedition = async (req, res, next) => {
     }
 
     expedition.produits.push(...produits);
-    await expedition.save();
+    await expedition.save(); // recalcule totalVentes + totalFrais
+
+    // Mettre à jour le champ expedition sur les ventes concernées
+    const venteIds = [
+      ...new Set(produits.filter((p) => p.vente).map((p) => p.vente)),
+    ];
+    if (venteIds.length > 0) {
+      await Vente.updateMany(
+        { _id: { $in: venteIds } },
+        { expedition: expedition._id },
+      );
+    }
 
     res.status(200).json({ success: true, data: expedition });
   } catch (error) {
@@ -147,7 +174,6 @@ export const ajouterProduitsExpedition = async (req, res, next) => {
 
 // @desc    Retirer un produit d'une expédition
 // @route   DELETE /api/expeditions/:id/produits/:produitId
-// @access  Private (Admin)
 export const retirerProduitExpedition = async (req, res, next) => {
   try {
     const expedition = await Expedition.findById(req.params.id);
@@ -167,7 +193,7 @@ export const retirerProduitExpedition = async (req, res, next) => {
     }
 
     expedition.produits.splice(idx, 1);
-    await expedition.save();
+    await expedition.save(); // recalcule après retrait
 
     res.status(200).json({ success: true, data: expedition });
   } catch (error) {
@@ -177,7 +203,6 @@ export const retirerProduitExpedition = async (req, res, next) => {
 
 // @desc    Stats expéditions
 // @route   GET /api/expeditions/stats/summary
-// @access  Private
 export const getExpeditionsStats = async (req, res, next) => {
   try {
     const { dateDebut, dateFin } = req.query;
@@ -234,16 +259,15 @@ export const getExpeditionsStats = async (req, res, next) => {
   }
 };
 
-// @desc    Ventes disponibles pour expédition (destination Antsirabe, non encore expédiées)
+// @desc    Ventes disponibles pour expédition
 // @route   GET /api/expeditions/ventes-disponibles
-// @access  Private
 export const getVentesDisponiblesExpedition = async (req, res, next) => {
   try {
     const { destination } = req.query;
 
     const filter = {
       statutLivraison: { $in: ["en_attente", "en_cours"] },
-      expedition: null, // pas encore rattachée à une expédition
+      expedition: null,
     };
 
     if (destination) {
@@ -254,19 +278,14 @@ export const getVentesDisponiblesExpedition = async (req, res, next) => {
       .populate("balle", "nom numero")
       .sort({ dateVente: -1 });
 
-    res.status(200).json({
-      success: true,
-      count: ventes.length,
-      data: ventes,
-    });
+    res.status(200).json({ success: true, count: ventes.length, data: ventes });
   } catch (error) {
     next(error);
   }
 };
 
-// @desc    Expéditions en préparation (pour le formulaire de vente)
+// @desc    Expéditions en préparation
 // @route   GET /api/expeditions/en-preparation
-// @access  Private
 export const getExpeditionsEnPreparation = async (req, res, next) => {
   try {
     const expeditions = await Expedition.find({ statut: "en_preparation" })
@@ -279,9 +298,8 @@ export const getExpeditionsEnPreparation = async (req, res, next) => {
   }
 };
 
-// @desc    Annuler une vente depuis une expédition (retire aussi de l'expédition)
+// @desc    Annuler une vente depuis une expédition
 // @route   PUT /api/expeditions/:id/annuler-vente/:venteId
-// @access  Private (Admin)
 export const annulerVenteExpedition = async (req, res, next) => {
   try {
     const expedition = await Expedition.findById(req.params.id);
@@ -312,7 +330,7 @@ export const annulerVenteExpedition = async (req, res, next) => {
       }
     }
 
-    // Mettre à jour la balle si nécessaire
+    // Mettre à jour la balle
     if (vente.balle) {
       const balle = await Vente.db.model("Balle").findById(vente.balle);
       if (balle) {
@@ -334,10 +352,17 @@ export const annulerVenteExpedition = async (req, res, next) => {
     expedition.produits = expedition.produits.filter(
       (p) => p.vente?.toString() !== vente._id.toString(),
     );
-    await expedition.save();
+    await expedition.save(); // recalcule totalVentes + totalFrais
 
     // Retourner l'expédition mise à jour avec ses ventes
-    const ventes = await Vente.find({ expedition: expedition._id })
+    const venteIds = [
+      ...new Set(
+        expedition.produits
+          .filter((p) => p.vente)
+          .map((p) => p.vente.toString()),
+      ),
+    ];
+    const ventes = await Vente.find({ _id: { $in: venteIds } })
       .populate("balle", "nom numero")
       .populate("produits.produit")
       .populate("livreur", "nom telephone")
@@ -349,9 +374,8 @@ export const annulerVenteExpedition = async (req, res, next) => {
   }
 };
 
-// @desc    Marquer une expédition comme expédiée (et figer les frais)
+// @desc    Marquer une expédition comme expédiée
 // @route   PUT /api/expeditions/:id/expedier
-// @access  Private (Admin)
 export const expedierExpedition = async (req, res, next) => {
   try {
     const expedition = await Expedition.findById(req.params.id);
@@ -361,30 +385,33 @@ export const expedierExpedition = async (req, res, next) => {
         .json({ success: false, message: "Expédition non trouvée" });
     }
     if (expedition.statut !== "en_preparation") {
-      return res.status(400).json({
-        success: false,
-        message: "Expédition déjà expédiée ou annulée",
-      });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Expédition déjà expédiée ou annulée",
+        });
     }
 
-    // Figer la date et passer au statut expédiée
     expedition.statut = "expédiée";
     expedition.dateExpedition = req.body.dateExpedition
       ? new Date(req.body.dateExpedition)
       : new Date();
 
-    // Mettre à jour les frais si fournis
     if (req.body.fraisColis !== undefined)
-      expedition.fraisColis = req.body.fraisColis;
-    if (req.body.salaireCommissionnaire !== undefined)
-      expedition.salaireCommissionnaire = req.body.salaireCommissionnaire;
+      expedition.fraisColis = Number(req.body.fraisColis);
     if (req.body.modeCommissionnaire !== undefined)
       expedition.modeCommissionnaire = req.body.modeCommissionnaire;
     if (req.body.pourcentageCommissionnaire !== undefined)
-      expedition.pourcentageCommissionnaire =
-        req.body.pourcentageCommissionnaire;
+      expedition.pourcentageCommissionnaire = Number(
+        req.body.pourcentageCommissionnaire,
+      );
+    if (req.body.salaireCommissionnaire !== undefined)
+      expedition.salaireCommissionnaire = Number(
+        req.body.salaireCommissionnaire,
+      );
 
-    await expedition.save(); // pre-save recalcule totalFrais
+    await expedition.save(); // pre-save recalcule tout (totalVentes, salaireCommissionnaire si %, totalFrais)
 
     res.status(200).json({ success: true, data: expedition });
   } catch (error) {
@@ -392,9 +419,8 @@ export const expedierExpedition = async (req, res, next) => {
   }
 };
 
-// @desc    Rattacher une vente à une expédition (depuis formulaire vente)
+// @desc    Rattacher une vente à une expédition
 // @route   PUT /api/expeditions/:id/rattacher-vente
-// @access  Private (Admin)
 export const rattacherVente = async (req, res, next) => {
   try {
     const { venteId } = req.body;
@@ -405,10 +431,12 @@ export const rattacherVente = async (req, res, next) => {
         .json({ success: false, message: "Expédition non trouvée" });
     }
     if (expedition.statut !== "en_preparation") {
-      return res.status(400).json({
-        success: false,
-        message: "Impossible d'ajouter à une expédition déjà expédiée",
-      });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Impossible d'ajouter à une expédition déjà expédiée",
+        });
     }
 
     const vente = await Vente.findById(venteId);
@@ -418,7 +446,6 @@ export const rattacherVente = async (req, res, next) => {
         .json({ success: false, message: "Vente non trouvée" });
     }
 
-    // Ajouter les produits de la vente à l'expédition
     const produitsAjoutes = (
       vente.produits && vente.produits.length > 0
         ? vente.produits
@@ -437,7 +464,7 @@ export const rattacherVente = async (req, res, next) => {
     }));
 
     expedition.produits.push(...produitsAjoutes);
-    await expedition.save();
+    await expedition.save(); // recalcule tout
 
     // Marquer la vente comme rattachée
     vente.expedition = expedition._id;

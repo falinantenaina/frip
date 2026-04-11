@@ -37,6 +37,7 @@ const ModifierProduitPage = () => {
         nomProduit: produitEntry.nomProduit,
         tailleProduit: produitEntry.tailleProduit || "",
         prixVente: produitEntry.prixVente.toString(),
+        prixAchat: produitEntry.prixAchat.toString(),
       });
       if (balleId)
         loadProduits(
@@ -92,6 +93,7 @@ const ModifierProduitPage = () => {
       nomProduit: formData.nomProduit,
       tailleProduit: formData.tailleProduit,
       prixVente: parseFloat(formData.prixVente),
+      prixAchat: parseFloat(formData.prixAchat),
     };
     if (formData.produit) payload.produit = formData.produit;
 
@@ -261,6 +263,18 @@ const ModifierProduitPage = () => {
               name="prixVente"
               className="form-input"
               value={formData.prixVente}
+              onChange={handleChange}
+              min="0"
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Prix d'achat (AR) *</label>
+            <input
+              type="number"
+              name="prixAchat"
+              className="form-input"
+              value={formData.prixAchat}
               onChange={handleChange}
               min="0"
               required
