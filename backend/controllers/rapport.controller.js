@@ -1,116 +1,160 @@
 import Balle from "../models/balle.model.js";
 import Depense from "../models/depense.model.js";
+import Expedition from "../models/expedition.model.js";
+import Investissement from "../models/investissement.model.js";
 import Vente from "../models/vente.model.js";
+import Versement from "../models/versement.model.js";
 
-// @desc    Obtenir le rapport global
+// Helper: parse date range
+function parseDateRange(dateDebut, dateFin) {
+  const match = {};
+  if (dateDebut || dateFin) {
+    match.$gte = dateDebut ? new Date(dateDebut) : undefined;
+    if (dateFin) {
+      const fin = new Date(dateFin);
+      fin.setDate(fin.getDate() + 1);
+      match.$lte = fin;
+    }
+  }
+  return Object.keys(match).length ? match : null;
+}
+
+// @desc    Rapport global complet
 // @route   GET /api/rapports/global
-// @access  Private
 export const getRapportGlobal = async (req, res, next) => {
   try {
     const { dateDebut, dateFin } = req.query;
+    const dateRange = parseDateRange(dateDebut, dateFin);
 
-    let matchQuery = {};
+    const venteMatch = { statutLivraison: { $ne: "annulé" } };
+    if (dateRange) venteMatch.dateVente = dateRange;
 
-    if (dateDebut || dateFin) {
-      matchQuery.dateVente = {};
-      if (dateDebut) {
-        matchQuery.dateVente.$gte = new Date(dateDebut);
-      }
-      if (dateFin) {
-        const fin = new Date(dateFin);
-        fin.setDate(fin.getDate() + 1);
-        matchQuery.dateVente.$lte = fin;
-      }
-    }
+    const depenseMatch = {};
+    if (dateRange) depenseMatch.dateDepense = dateRange;
 
-    // Statistiques des ventes
-    const ventesStats = await Vente.aggregate([
-      {
-        $match: {
-          ...matchQuery,
-          statutLivraison: { $ne: "annulé" },
-        },
-      },
-      {
-        $group: {
+    // Pour les frais : seulement les expéditions expédiées/livrées (pas en préparation)
+    const expeditionMatch = { statut: { $in: ["expédiée", "livrée"] } };
+    if (dateRange) expeditionMatch.dateExpedition = dateRange;
+
+    // ── Ventes par type ──────────────────────────────────────────────────
+    const [ventesStats, ventesBalle, ventesLibres, ventesExpediees] = await Promise.all([
+      Vente.aggregate([
+        { $match: venteMatch },
+        { $group: { _id: null, totalVentes: { $sum: 1 }, montantVentes: { $sum: "$prixVente" }, fraisLivraison: { $sum: "$fraisLivraison" }, montantTotal: { $sum: "$montantTotal" } } },
+      ]),
+      // Ventes par balle
+      Vente.aggregate([
+        { $match: { ...venteMatch, typeVente: "balle" } },
+        { $group: { _id: null, montant: { $sum: "$prixVente" }, count: { $sum: 1 } } },
+      ]),
+      // Ventes libres (fournisseur direct) — calcul bénéfice avec prixAchat
+      Vente.aggregate([
+        { $match: { ...venteMatch, typeVente: "libre" } },
+        { $unwind: { path: "$produits", preserveNullAndEmptyArrays: true } },
+        { $group: {
           _id: null,
-          totalVentes: { $sum: 1 },
-          montantVentes: { $sum: "$prixVente" },
-          fraisLivraison: { $sum: "$fraisLivraison" },
-          montantTotal: { $sum: "$montantTotal" },
-        },
-      },
+          montantVentes: { $sum: "$produits.prixVente" },
+          coutAchat: { $sum: "$produits.prixAchat" },
+          count: { $sum: 1 },
+        }},
+      ]),
+      // Ventes rattachées à une expédition expédiée
+      Vente.aggregate([
+        { $match: { ...venteMatch, expedition: { $ne: null } } },
+        { $group: { _id: null, montant: { $sum: "$prixVente" }, count: { $sum: 1 } } },
+      ]),
     ]);
 
-    // Statistiques des dépenses
-    let depensesMatchQuery = {};
-    if (dateDebut || dateFin) {
-      depensesMatchQuery.dateDepense = {};
-      if (dateDebut) {
-        depensesMatchQuery.dateDepense.$gte = new Date(dateDebut);
-      }
-      if (dateFin) {
-        depensesMatchQuery.dateDepense.$lte = new Date(dateFin);
-      }
-    }
-
-    const depensesStats = await Depense.aggregate([
-      { $match: depensesMatchQuery },
-      {
-        $group: {
-          _id: null,
-          totalDepenses: { $sum: "$montant" },
-          nombreDepenses: { $sum: 1 },
-        },
-      },
+    // ── Dépenses par catégorie ───────────────────────────────────────────
+    const [depensesStats, depensesParType, depensesGlobales, depensesParBalle] = await Promise.all([
+      Depense.aggregate([{ $match: depenseMatch }, { $group: { _id: null, totalDepenses: { $sum: "$montant" }, nombreDepenses: { $sum: 1 } } }]),
+      Depense.aggregate([{ $match: depenseMatch }, { $group: { _id: "$type", total: { $sum: "$montant" }, count: { $sum: 1 } } }, { $sort: { total: -1 } }]),
+      Depense.aggregate([{ $match: { ...depenseMatch, balle: null } }, { $group: { _id: null, total: { $sum: "$montant" } } }]),
+      Depense.aggregate([{ $match: { ...depenseMatch, balle: { $ne: null } } }, { $group: { _id: null, total: { $sum: "$montant" } } }]),
     ]);
 
-    // Statistiques des balles
+    // ── Expéditions (seulement expédiées/livrées pour les frais réels) ───
+    const [expeditionsStats] = await Promise.all([
+      Expedition.aggregate([
+        { $match: expeditionMatch },
+        { $group: {
+          _id: null,
+          totalExpeditions: { $sum: 1 },
+          totalFraisColis: { $sum: "$fraisColis" },
+          totalSalaireCommissionnaire: { $sum: "$salaireCommissionnaire" },
+          totalFrais: { $sum: "$totalFrais" },
+          totalProduits: { $sum: { $size: "$produits" } },
+          totalVentesExpediees: { $sum: "$totalVentes" },
+        }},
+      ]),
+    ]);
+
+    // ── Balles ───────────────────────────────────────────────────────────
     const ballesStats = await Balle.aggregate([
-      {
-        $group: {
-          _id: null,
-          nombreBalles: { $sum: 1 },
-          totalInvesti: { $sum: "$prixAchat" },
-          totalVentes: { $sum: "$totalVentes" },
-          totalBenefice: { $sum: "$benefice" },
-        },
-      },
+      { $group: { _id: null, nombreBalles: { $sum: 1 }, totalInvesti: { $sum: "$prixAchat" }, totalVentes: { $sum: "$totalVentes" }, totalDepensesLiees: { $sum: "$depensesLiees" }, totalBenefice: { $sum: "$benefice" } } },
     ]);
 
-    const ventes = ventesStats[0] || {
-      totalVentes: 0,
-      montantVentes: 0,
-      fraisLivraison: 0,
-      montantTotal: 0,
-    };
+    // ── Investissements / Versements ─────────────────────────────────────
+    const investMatch = {};
+    if (dateRange) investMatch.dateInvestissement = dateRange;
+    const versMatch = {};
+    if (dateRange) versMatch.dateVersement = dateRange;
 
-    const depenses = depensesStats[0] || {
-      totalDepenses: 0,
-      nombreDepenses: 0,
-    };
+    const [investStats, versStats] = await Promise.all([
+      Investissement.aggregate([{ $match: investMatch }, { $group: { _id: null, total: { $sum: "$montant" }, count: { $sum: 1 } } }]),
+      Versement.aggregate([{ $match: versMatch }, { $group: { _id: null, total: { $sum: "$montant" }, count: { $sum: 1 } } }]),
+    ]);
 
-    const balles = ballesStats[0] || {
-      nombreBalles: 0,
-      totalInvesti: 0,
-      totalVentes: 0,
-      totalBenefice: 0,
-    };
+    const ventes = ventesStats[0] || { totalVentes: 0, montantVentes: 0, fraisLivraison: 0, montantTotal: 0 };
+    const depenses = depensesStats[0] || { totalDepenses: 0, nombreDepenses: 0 };
+    const expeditions = expeditionsStats[0] || { totalExpeditions: 0, totalFraisColis: 0, totalSalaireCommissionnaire: 0, totalFrais: 0, totalProduits: 0, totalVentesExpediees: 0 };
+    const balles = ballesStats[0] || { nombreBalles: 0, totalInvesti: 0, totalVentes: 0, totalBenefice: 0 };
 
-    // Calculer le bénéfice net
-    const beneficeNet = ventes.montantVentes - depenses.totalDepenses;
+    // ── Bénéfices séparés ────────────────────────────────────────────────
+    const libresData = ventesLibres[0] || { montantVentes: 0, coutAchat: 0, count: 0 };
+    const balleData = ventesBalle[0] || { montant: 0, count: 0 };
+
+    // Bénéfice balles = totalBenefice calculé dans les balles (déjà: ventes - achat - dépenses)
+    const beneficeBalles = balles.totalBenefice;
+    // Bénéfice libres = ventes libres - coût d'achat
+    const beneficeLibres = libresData.montantVentes - libresData.coutAchat;
+    // Bénéfice expéditions = CA expédié - frais expéditions - dépenses globales
+    const beneficeExpeditions = expeditions.totalVentesExpediees - expeditions.totalFrais;
+    // Bénéfice net global
+    const totalCharges = depenses.totalDepenses + expeditions.totalFrais;
+    const beneficeNet = ventes.montantVentes - totalCharges;
 
     res.status(200).json({
       success: true,
       data: {
-        ventes,
-        depenses,
-        balles,
-        beneficeNet,
-        periode: {
-          dateDebut: dateDebut || "Toutes",
-          dateFin: dateFin || "Toutes",
+        ventes: {
+          ...ventes,
+          parBalle: balleData,
+          libres: { ...libresData, benefice: beneficeLibres },
+          expediees: ventesExpediees[0] || { montant: 0, count: 0 },
         },
+        depenses: {
+          ...depenses,
+          parType: depensesParType,
+          globales: depensesGlobales[0]?.total || 0,
+          liéesBalles: depensesParBalle[0]?.total || 0,
+        },
+        expeditions,
+        balles,
+        benefices: {
+          balles: beneficeBalles,
+          libres: beneficeLibres,
+          expeditions: beneficeExpeditions,
+          net: beneficeNet,
+        },
+        investisseur: {
+          totalRecu: investStats[0]?.total || 0,
+          totalVerse: versStats[0]?.total || 0,
+          solde: (investStats[0]?.total || 0) - (versStats[0]?.total || 0),
+        },
+        totalCharges,
+        beneficeNet,
+        periode: { dateDebut: dateDebut || "Tout", dateFin: dateFin || "Tout" },
       },
     });
   } catch (error) {
@@ -118,366 +162,213 @@ export const getRapportGlobal = async (req, res, next) => {
   }
 };
 
-// @desc    Obtenir le rapport par jour
-// @route   GET /api/rapports/par-jour
-// @access  Private
+// @desc    Rapport par jour
 export const getRapportParJour = async (req, res, next) => {
   try {
     const { dateDebut, dateFin } = req.query;
+    const dateRange = parseDateRange(dateDebut, dateFin);
 
-    let matchQuery = {};
+    const venteMatch = { statutLivraison: { $ne: "annulé" } };
+    if (dateRange) venteMatch.dateVente = dateRange;
+    const depenseMatch = {};
+    if (dateRange) depenseMatch.dateDepense = dateRange;
+    const expedMatch = {};
+    if (dateRange) expedMatch.dateExpedition = dateRange;
 
-    if (dateDebut || dateFin) {
-      matchQuery.dateVente = {};
-      if (dateDebut) {
-        matchQuery.dateVente.$gte = new Date(dateDebut);
-      }
-      if (dateFin) {
-        const fin = new Date(dateFin);
-        fin.setDate(fin.getDate() + 10);
-        matchQuery.dateVente.$lte = fin;
-      }
-    }
-
-    // Ventes par jour
-    const ventesParJour = await Vente.aggregate([
-      {
-        $match: {
-          ...matchQuery,
-          statutLivraison: { $ne: "annulé" },
-        },
-      },
-      {
-        $group: {
-          _id: {
-            $dateToString: { format: "%Y-%m-%d", date: "$dateVente" },
+    const [ventesParJour, depensesParJour, expedParJour] = await Promise.all([
+      Vente.aggregate([
+        { $match: venteMatch },
+        {
+          $group: {
+            _id: { $dateToString: { format: "%Y-%m-%d", date: "$dateVente" } },
+            nombreVentes: { $sum: 1 },
+            montantVentes: { $sum: "$prixVente" },
           },
-          nombreVentes: { $sum: 1 },
-          montantTotal: { $sum: "$montantTotal" },
-          montantVentes: { $sum: "$prixVente" },
         },
-      },
-      { $sort: { _id: -1 } },
+        { $sort: { _id: -1 } },
+      ]),
+      Depense.aggregate([
+        { $match: depenseMatch },
+        {
+          $group: {
+            _id: { $dateToString: { format: "%Y-%m-%d", date: "$dateDepense" } },
+            montantDepenses: { $sum: "$montant" },
+          },
+        },
+      ]),
+      Expedition.aggregate([
+        { $match: expedMatch },
+        {
+          $group: {
+            _id: { $dateToString: { format: "%Y-%m-%d", date: "$dateExpedition" } },
+            fraisExpedition: { $sum: "$totalFrais" },
+            nombreExpeditions: { $sum: 1 },
+          },
+        },
+      ]),
     ]);
 
-    // Dépenses par jour
-    let depensesMatchQuery = {};
-    if (dateDebut || dateFin) {
-      depensesMatchQuery.dateDepense = {};
-      if (dateDebut) {
-        depensesMatchQuery.dateDepense.$gte = new Date(dateDebut);
-      }
-      if (dateFin) {
-        depensesMatchQuery.dateDepense.$lte = new Date(dateFin);
-      }
-    }
-
-    const depensesParJour = await Depense.aggregate([
-      { $match: depensesMatchQuery },
-      {
-        $group: {
-          _id: {
-            $dateToString: { format: "%Y-%m-%d", date: "$dateDepense" },
-          },
-          montantTotal: { $sum: "$montant" },
-          nombreDepenses: { $sum: 1 },
-        },
-      },
-      { $sort: { _id: -1 } },
-    ]);
-
-    // Combiner les données
     const datesMap = new Map();
-
     ventesParJour.forEach((item) => {
       datesMap.set(item._id, {
         date: item._id,
         ventes: item.nombreVentes,
         montantVentes: item.montantVentes,
         depenses: 0,
+        fraisExpedition: 0,
         benefice: item.montantVentes,
       });
     });
-
     depensesParJour.forEach((item) => {
-      if (datesMap.has(item._id)) {
-        const data = datesMap.get(item._id);
-        data.depenses = item.montantTotal;
-        data.benefice = data.montantVentes - item.montantTotal;
-      } else {
-        datesMap.set(item._id, {
-          date: item._id,
-          ventes: 0,
-          montantVentes: 0,
-          depenses: item.montantTotal,
-          benefice: -item.montantTotal,
-        });
-      }
+      const d = datesMap.get(item._id) || { date: item._id, ventes: 0, montantVentes: 0, fraisExpedition: 0 };
+      d.depenses = item.montantDepenses;
+      d.benefice = (d.montantVentes || 0) - item.montantDepenses - (d.fraisExpedition || 0);
+      datesMap.set(item._id, d);
+    });
+    expedParJour.forEach((item) => {
+      const d = datesMap.get(item._id) || { date: item._id, ventes: 0, montantVentes: 0, depenses: 0 };
+      d.fraisExpedition = item.fraisExpedition;
+      d.nombreExpeditions = item.nombreExpeditions;
+      d.benefice = (d.montantVentes || 0) - (d.depenses || 0) - item.fraisExpedition;
+      datesMap.set(item._id, d);
     });
 
-    const rapportParJour = Array.from(datesMap.values()).sort((a, b) =>
-      b.date.localeCompare(a.date),
-    );
-
-    res.status(200).json({
-      success: true,
-      count: rapportParJour.length,
-      data: rapportParJour,
-    });
+    const rapport = Array.from(datesMap.values()).sort((a, b) => b.date.localeCompare(a.date));
+    res.status(200).json({ success: true, count: rapport.length, data: rapport });
   } catch (error) {
     next(error);
   }
 };
 
-// @desc    Obtenir le rapport par semaine
-// @route   GET /api/rapports/par-semaine
-// @access  Private
-export const getRapportParSemaine = async (req, res, next) => {
-  try {
-    const { dateDebut, dateFin } = req.query;
-
-    let matchQuery = {};
-
-    if (dateDebut || dateFin) {
-      matchQuery.dateVente = {};
-      if (dateDebut) {
-        matchQuery.dateVente.$gte = new Date(dateDebut);
-      }
-      if (dateFin) {
-        const fin = new Date(dateFin);
-        fin.setDate(fin.getDate() + 1);
-        matchQuery.dateVente.$lte = fin;
-      }
-    }
-
-    // Ventes par semaine
-    const ventesParSemaine = await Vente.aggregate([
-      {
-        $match: {
-          ...matchQuery,
-          statutLivraison: { $ne: "annulé" },
-        },
-      },
-      {
-        $group: {
-          _id: {
-            annee: { $year: "$dateVente" },
-            semaine: { $week: "$dateVente" },
-          },
-          nombreVentes: { $sum: 1 },
-          montantTotal: { $sum: "$montantTotal" },
-          montantVentes: { $sum: "$prixVente" },
-        },
-      },
-      { $sort: { "_id.annee": -1, "_id.semaine": -1 } },
-    ]);
-
-    // Dépenses par semaine
-    let depensesMatchQuery = {};
-    if (dateDebut || dateFin) {
-      depensesMatchQuery.dateDepense = {};
-      if (dateDebut) {
-        depensesMatchQuery.dateDepense.$gte = new Date(dateDebut);
-      }
-      if (dateFin) {
-        depensesMatchQuery.dateDepense.$lte = new Date(dateFin);
-      }
-    }
-
-    const depensesParSemaine = await Depense.aggregate([
-      { $match: depensesMatchQuery },
-      {
-        $group: {
-          _id: {
-            annee: { $year: "$dateDepense" },
-            semaine: { $week: "$dateDepense" },
-          },
-          montantTotal: { $sum: "$montant" },
-        },
-      },
-      { $sort: { "_id.annee": -1, "_id.semaine": -1 } },
-    ]);
-
-    // Combiner les données
-    const semainesMap = new Map();
-
-    ventesParSemaine.forEach((item) => {
-      const key = `${item._id.annee}-${item._id.semaine}`;
-      semainesMap.set(key, {
-        annee: item._id.annee,
-        semaine: item._id.semaine,
-        ventes: item.nombreVentes,
-        montantVentes: item.montantVentes,
-        depenses: 0,
-        benefice: item.montantVentes,
-      });
-    });
-
-    depensesParSemaine.forEach((item) => {
-      const key = `${item._id.annee}-${item._id.semaine}`;
-      if (semainesMap.has(key)) {
-        const data = semainesMap.get(key);
-        data.depenses = item.montantTotal;
-        data.benefice = data.montantVentes - item.montantTotal;
-      } else {
-        semainesMap.set(key, {
-          annee: item._id.annee,
-          semaine: item._id.semaine,
-          ventes: 0,
-          montantVentes: 0,
-          depenses: item.montantTotal,
-          benefice: -item.montantTotal,
-        });
-      }
-    });
-
-    const rapportParSemaine = Array.from(semainesMap.values()).sort((a, b) => {
-      if (a.annee !== b.annee) return b.annee - a.annee;
-      return b.semaine - a.semaine;
-    });
-
-    res.status(200).json({
-      success: true,
-      count: rapportParSemaine.length,
-      data: rapportParSemaine,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// @desc    Obtenir le rapport par mois
-// @route   GET /api/rapports/par-mois
-// @access  Private
+// @desc    Rapport par mois
 export const getRapportParMois = async (req, res, next) => {
   try {
     const { dateDebut, dateFin } = req.query;
+    const dateRange = parseDateRange(dateDebut, dateFin);
 
-    let matchQuery = {};
+    const venteMatch = { statutLivraison: { $ne: "annulé" } };
+    if (dateRange) venteMatch.dateVente = dateRange;
+    const depenseMatch = {};
+    if (dateRange) depenseMatch.dateDepense = dateRange;
+    const expedMatch = {};
+    if (dateRange) expedMatch.dateExpedition = dateRange;
 
-    if (dateDebut || dateFin) {
-      matchQuery.dateVente = {};
-      if (dateDebut) {
-        matchQuery.dateVente.$gte = new Date(dateDebut);
-      }
-      if (dateFin) {
-        const fin = new Date(dateFin);
-        fin.setDate(fin.getDate() + 1);
-        matchQuery.dateVente.$lte = fin;
-      }
-    }
-
-    // Ventes par mois
-    const ventesParMois = await Vente.aggregate([
-      {
-        $match: {
-          ...matchQuery,
-          statutLivraison: { $ne: "annulé" },
-        },
-      },
-      {
-        $group: {
-          _id: {
-            annee: { $year: "$dateVente" },
-            mois: { $month: "$dateVente" },
+    const [ventesParMois, depensesParMois, expedParMois] = await Promise.all([
+      Vente.aggregate([
+        { $match: venteMatch },
+        {
+          $group: {
+            _id: { annee: { $year: "$dateVente" }, mois: { $month: "$dateVente" } },
+            nombreVentes: { $sum: 1 },
+            montantVentes: { $sum: "$prixVente" },
           },
-          nombreVentes: { $sum: 1 },
-          montantTotal: { $sum: "$montantTotal" },
-          montantVentes: { $sum: "$prixVente" },
         },
-      },
-      { $sort: { "_id.annee": -1, "_id.mois": -1 } },
+        { $sort: { "_id.annee": -1, "_id.mois": -1 } },
+      ]),
+      Depense.aggregate([
+        { $match: depenseMatch },
+        {
+          $group: {
+            _id: { annee: { $year: "$dateDepense" }, mois: { $month: "$dateDepense" } },
+            montantDepenses: { $sum: "$montant" },
+          },
+        },
+      ]),
+      Expedition.aggregate([
+        { $match: expedMatch },
+        {
+          $group: {
+            _id: { annee: { $year: "$dateExpedition" }, mois: { $month: "$dateExpedition" } },
+            fraisExpedition: { $sum: "$totalFrais" },
+            count: { $sum: 1 },
+          },
+        },
+      ]),
     ]);
 
-    // Dépenses par mois
-    let depensesMatchQuery = {};
-    if (dateDebut || dateFin) {
-      depensesMatchQuery.dateDepense = {};
-      if (dateDebut) {
-        depensesMatchQuery.dateDepense.$gte = new Date(dateDebut);
-      }
-      if (dateFin) {
-        depensesMatchQuery.dateDepense.$lte = new Date(dateFin);
-      }
-    }
-
-    const depensesParMois = await Depense.aggregate([
-      { $match: depensesMatchQuery },
-      {
-        $group: {
-          _id: {
-            annee: { $year: "$dateDepense" },
-            mois: { $month: "$dateDepense" },
-          },
-          montantTotal: { $sum: "$montant" },
-        },
-      },
-      { $sort: { "_id.annee": -1, "_id.mois": -1 } },
-    ]);
-
-    // Combiner les données
     const moisMap = new Map();
-
     ventesParMois.forEach((item) => {
-      const key = `${item._id.annee}-${item._id.mois}`;
+      const key = `${item._id.annee}-${String(item._id.mois).padStart(2, "0")}`;
       moisMap.set(key, {
         annee: item._id.annee,
         mois: item._id.mois,
-        ventes: item.nombreVentes,
+        nombreVentes: item.nombreVentes,
         montantVentes: item.montantVentes,
         depenses: 0,
+        fraisExpedition: 0,
         benefice: item.montantVentes,
       });
     });
-
     depensesParMois.forEach((item) => {
-      const key = `${item._id.annee}-${item._id.mois}`;
-      if (moisMap.has(key)) {
-        const data = moisMap.get(key);
-        data.depenses = item.montantTotal;
-        data.benefice = data.montantVentes - item.montantTotal;
-      } else {
-        moisMap.set(key, {
-          annee: item._id.annee,
-          mois: item._id.mois,
-          ventes: 0,
-          montantVentes: 0,
-          depenses: item.montantTotal,
-          benefice: -item.montantTotal,
-        });
-      }
+      const key = `${item._id.annee}-${String(item._id.mois).padStart(2, "0")}`;
+      const d = moisMap.get(key) || { annee: item._id.annee, mois: item._id.mois, nombreVentes: 0, montantVentes: 0, fraisExpedition: 0 };
+      d.depenses = item.montantDepenses;
+      d.benefice = (d.montantVentes || 0) - item.montantDepenses - (d.fraisExpedition || 0);
+      moisMap.set(key, d);
+    });
+    expedParMois.forEach((item) => {
+      const key = `${item._id.annee}-${String(item._id.mois).padStart(2, "0")}`;
+      const d = moisMap.get(key) || { annee: item._id.annee, mois: item._id.mois, nombreVentes: 0, montantVentes: 0, depenses: 0 };
+      d.fraisExpedition = item.fraisExpedition;
+      d.nombreExpeditions = item.count;
+      d.benefice = (d.montantVentes || 0) - (d.depenses || 0) - item.fraisExpedition;
+      moisMap.set(key, d);
     });
 
-    const rapportParMois = Array.from(moisMap.values()).sort((a, b) => {
+    const rapport = Array.from(moisMap.values()).sort((a, b) => {
       if (a.annee !== b.annee) return b.annee - a.annee;
       return b.mois - a.mois;
     });
-
-    res.status(200).json({
-      success: true,
-      count: rapportParMois.length,
-      data: rapportParMois,
-    });
+    res.status(200).json({ success: true, count: rapport.length, data: rapport });
   } catch (error) {
     next(error);
   }
 };
 
-// @desc    Obtenir le rapport par balle
-// @route   GET /api/rapports/par-balle
-// @access  Private
+// @desc    Rapport par semaine
+export const getRapportParSemaine = async (req, res, next) => {
+  try {
+    const { dateDebut, dateFin } = req.query;
+    const dateRange = parseDateRange(dateDebut, dateFin);
+
+    const venteMatch = { statutLivraison: { $ne: "annulé" } };
+    if (dateRange) venteMatch.dateVente = dateRange;
+
+    const ventesParSemaine = await Vente.aggregate([
+      { $match: venteMatch },
+      {
+        $group: {
+          _id: { annee: { $year: "$dateVente" }, semaine: { $week: "$dateVente" } },
+          nombreVentes: { $sum: 1 },
+          montantVentes: { $sum: "$prixVente" },
+        },
+      },
+      { $sort: { "_id.annee": -1, "_id.semaine": -1 } },
+    ]);
+
+    res.status(200).json({ success: true, data: ventesParSemaine.map((v) => ({
+      annee: v._id.annee,
+      semaine: v._id.semaine,
+      nombreVentes: v.nombreVentes,
+      montantVentes: v.montantVentes,
+    })) });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Rapport par balle
 export const getRapportParBalle = async (req, res, next) => {
   try {
     const balles = await Balle.find().sort({ createdAt: -1 });
 
-    const rapportParBalle = await Promise.all(
+    const rapport = await Promise.all(
       balles.map(async (balle) => {
-        const ventes = await Vente.countDocuments({
-          balle: balle._id,
-          statutLivraison: { $ne: "annulé" },
-        });
-
-        const depenses = await Depense.find({ balle: balle._id });
+        const [ventesCount, depenses, ventesLibresCount] = await Promise.all([
+          Vente.countDocuments({ balle: balle._id, statutLivraison: { $ne: "annulé" } }),
+          Depense.find({ balle: balle._id }),
+          Vente.countDocuments({ balle: balle._id, typeVente: "balle", statutLivraison: { $ne: "annulé" } }),
+        ]);
         const totalDepenses = depenses.reduce((sum, d) => sum + d.montant, 0);
 
         return {
@@ -486,18 +377,50 @@ export const getRapportParBalle = async (req, res, next) => {
           numero: balle.numero,
           prixAchat: balle.prixAchat,
           totalVentes: balle.totalVentes,
-          nombreVentes: ventes,
+          nombreVentes: ventesCount,
           depenses: totalDepenses,
           benefice: balle.benefice,
           statut: balle.statut,
+          dateAchat: balle.dateAchat,
         };
-      }),
+      })
     );
+
+    res.status(200).json({ success: true, count: rapport.length, data: rapport });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Rapport expéditions
+export const getRapportExpeditions = async (req, res, next) => {
+  try {
+    const { dateDebut, dateFin } = req.query;
+    const dateRange = parseDateRange(dateDebut, dateFin);
+    const match = {};
+    if (dateRange) match.dateExpedition = dateRange;
+
+    const expeditions = await Expedition.find(match).sort({ dateExpedition: -1 });
+
+    const stats = await Expedition.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: "$destination",
+          totalExpeditions: { $sum: 1 },
+          totalProduits: { $sum: { $size: "$produits" } },
+          totalFraisColis: { $sum: "$fraisColis" },
+          totalSalaire: { $sum: "$salaireCommissionnaire" },
+          totalFrais: { $sum: "$totalFrais" },
+          totalVentes: { $sum: "$totalVentes" },
+        },
+      },
+      { $sort: { totalExpeditions: -1 } },
+    ]);
 
     res.status(200).json({
       success: true,
-      count: rapportParBalle.length,
-      data: rapportParBalle,
+      data: { expeditions, statsParDestination: stats },
     });
   } catch (error) {
     next(error);

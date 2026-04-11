@@ -1,5 +1,6 @@
 import express from "express";
 import {
+  getRapportExpeditions,
   getRapportGlobal,
   getRapportParBalle,
   getRapportParJour,
@@ -16,5 +17,6 @@ router.get("/par-jour", getRapportParJour);
 router.get("/par-semaine", getRapportParSemaine);
 router.get("/par-mois", getRapportParMois);
 router.get("/par-balle", getRapportParBalle);
+router.get("/expeditions", getRapportExpeditions);
 
 export default router;

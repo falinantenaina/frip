@@ -1,43 +1,36 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
-import useAuthStore from './stores/authStore';
-import Sidebar from './components/Sidebar';
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Balles from './pages/Balles';
-import BalleForm from './pages/BalleForm';
-import BalleDetails from './pages/BalleDetails';
-import Ventes from './pages/Ventes';
-import VenteForm from './pages/VenteForm';
-import Depenses from './pages/Depenses';
-import DepenseForm from './pages/DepenseForm';
-import Livreurs from './pages/Livreurs';
-import LivreurDetails from './pages/LivreurDetails';
-import Rapports from './pages/Rapports';
-import ProduitForm from './pages/ProduitForm';
-import Investissements from './pages/Investissements';
+import { Navigate, Route, Routes } from "react-router-dom";
+import Sidebar from "./components/Sidebar";
+import BalleDetails from "./pages/BalleDetails";
+import BalleForm from "./pages/BalleForm";
+import Balles from "./pages/Balles";
+import Dashboard from "./pages/Dashboard";
+import DepenseForm from "./pages/DepenseForm";
+import Depenses from "./pages/Depenses";
+import Expeditions from "./pages/Expeditions";
+import Investissements from "./pages/Investissements";
+import LivreurDetails from "./pages/LivreurDetails";
+import Livreurs from "./pages/Livreurs";
+import Login from "./pages/Login";
+import ProduitForm from "./pages/ProduitForm";
+import Rapports from "./pages/Rapports";
+import VenteForm from "./pages/VenteForm";
+import Ventes from "./pages/Ventes";
+import AjouterProduitPage from "./pages/ventes/AjouterProduitPage";
+import ModifierProduitPage from "./pages/ventes/ModifierProduitPage";
+import useAuthStore from "./stores/authStore";
 
-// Route protégée
 const PrivateRoute = ({ children }) => {
   const { isAuthenticated } = useAuthStore();
   return isAuthenticated ? children : <Navigate to="/login" />;
 };
 
-// Route protégée Admin seulement
 const AdminRoute = ({ children }) => {
   const { isAuthenticated, user } = useAuthStore();
-  
-  if (!isAuthenticated) {
-    return <Navigate to="/login" />;
-  }
-  
-  if (user?.role !== 'admin') {
-    return <Navigate to="/" />;
-  }
-  
+  if (!isAuthenticated) return <Navigate to="/login" />;
+  if (user?.role !== "admin") return <Navigate to="/" />;
   return children;
 };
 
-// Route publique (redirige si connecté)
 const PublicRoute = ({ children }) => {
   const { isAuthenticated } = useAuthStore();
   return !isAuthenticated ? children : <Navigate to="/" />;
@@ -49,9 +42,7 @@ function App() {
   return (
     <div className="app-container">
       {isAuthenticated && <Sidebar />}
-      
       <Routes>
-        {/* Routes publiques */}
         <Route
           path="/login"
           element={
@@ -60,8 +51,6 @@ function App() {
             </PublicRoute>
           }
         />
-
-        {/* Routes protégées - Accessibles à tous les utilisateurs connectés */}
         <Route
           path="/"
           element={
@@ -70,7 +59,6 @@ function App() {
             </PrivateRoute>
           }
         />
-
         <Route
           path="/rapports"
           element={
@@ -79,8 +67,6 @@ function App() {
             </PrivateRoute>
           }
         />
-
-        {/* Routes protégées - Admin seulement */}
         <Route
           path="/balles"
           element={
@@ -89,7 +75,6 @@ function App() {
             </AdminRoute>
           }
         />
-
         <Route
           path="/balles/new"
           element={
@@ -98,7 +83,6 @@ function App() {
             </AdminRoute>
           }
         />
-
         <Route
           path="/balles/:id"
           element={
@@ -107,7 +91,6 @@ function App() {
             </AdminRoute>
           }
         />
-
         <Route
           path="/balles/:id/edit"
           element={
@@ -116,7 +99,6 @@ function App() {
             </AdminRoute>
           }
         />
-
         <Route
           path="/ventes"
           element={
@@ -125,7 +107,6 @@ function App() {
             </AdminRoute>
           }
         />
-
         <Route
           path="/ventes/new"
           element={
@@ -133,6 +114,15 @@ function App() {
               <VenteForm />
             </AdminRoute>
           }
+        />
+        <Route
+          path="/ventes/:id/ajouter-produit"
+          element={<AjouterProduitPage />}
+        />
+
+        <Route
+          path="/ventes/:venteId/produits/:produitEntryId/edit"
+          element={<ModifierProduitPage />}
         />
 
         <Route
@@ -143,7 +133,6 @@ function App() {
             </AdminRoute>
           }
         />
-
         <Route
           path="/depenses"
           element={
@@ -152,34 +141,6 @@ function App() {
             </AdminRoute>
           }
         />
-
-        <Route
-          path="/livreurs"
-          element={
-            <AdminRoute>
-              <Livreurs />
-            </AdminRoute>
-          }
-        />
-
-        <Route
-          path="/livreurs/:id"
-          element={
-            <AdminRoute>
-              <LivreurDetails />
-            </AdminRoute>
-          }
-        />
-
-        <Route
-          path="/produits/new"
-          element={
-            <AdminRoute>
-              <ProduitForm />
-            </AdminRoute>
-          }
-        />
-
         <Route
           path="/depenses/new"
           element={
@@ -188,7 +149,30 @@ function App() {
             </AdminRoute>
           }
         />
-
+        <Route
+          path="/livreurs"
+          element={
+            <AdminRoute>
+              <Livreurs />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/livreurs/:id"
+          element={
+            <AdminRoute>
+              <LivreurDetails />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/produits/new"
+          element={
+            <AdminRoute>
+              <ProduitForm />
+            </AdminRoute>
+          }
+        />
         <Route
           path="/investissements"
           element={
@@ -197,8 +181,14 @@ function App() {
             </AdminRoute>
           }
         />
-
-        {/* Redirection par défaut */}
+        <Route
+          path="/expeditions"
+          element={
+            <AdminRoute>
+              <Expeditions />
+            </AdminRoute>
+          }
+        />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </div>

@@ -11,6 +11,7 @@ import {
   FaTimes,
   FaTruck,
 } from "react-icons/fa";
+
 import { NavLink } from "react-router-dom";
 import useAuthStore from "../stores/authStore";
 import "./Sidebar.css";
@@ -20,33 +21,20 @@ const Sidebar = () => {
   const isInvestisseur = user?.role === "investisseur";
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const handleLogout = () => {
-    logout();
-  };
-
-  const toggleSidebar = () => {
-    setIsExpanded(!isExpanded);
-  };
-
-  // Fermer la sidebar après un clic sur un lien (mobile)
   const handleLinkClick = () => {
-    if (window.innerWidth <= 768) {
-      setIsExpanded(false);
-    }
+    if (window.innerWidth <= 768) setIsExpanded(false);
   };
 
   return (
     <>
-      {/* Bouton hamburger (mobile seulement) */}
       <button
         className="sidebar-toggle"
-        onClick={toggleSidebar}
+        onClick={() => setIsExpanded(!isExpanded)}
         aria-label="Toggle menu"
       >
         {isExpanded ? <FaTimes /> : <FaBars />}
       </button>
 
-      {/* Overlay pour fermer la sidebar en cliquant à côté (mobile) */}
       {isExpanded && (
         <div className="sidebar-overlay" onClick={() => setIsExpanded(false)} />
       )}
@@ -70,6 +58,16 @@ const Sidebar = () => {
           {!isInvestisseur && (
             <>
               <NavLink
+                to="/ventes"
+                className={({ isActive }) =>
+                  `nav-item ${isActive ? "active" : ""}`
+                }
+                onClick={handleLinkClick}
+              >
+                <FaShoppingCart />
+                <span>Ventes</span>
+              </NavLink>
+              <NavLink
                 to="/balles"
                 className={({ isActive }) =>
                   `nav-item ${isActive ? "active" : ""}`
@@ -81,16 +79,15 @@ const Sidebar = () => {
               </NavLink>
 
               <NavLink
-                to="/ventes"
+                to="/expeditions"
                 className={({ isActive }) =>
                   `nav-item ${isActive ? "active" : ""}`
                 }
                 onClick={handleLinkClick}
               >
-                <FaShoppingCart />
-                <span>Ventes</span>
+                <span style={{ fontSize: 18 }}>📦</span>
+                <span>Expéditions</span>
               </NavLink>
-
               <NavLink
                 to="/depenses"
                 className={({ isActive }) =>
@@ -101,7 +98,6 @@ const Sidebar = () => {
                 <FaDollarSign />
                 <span>Dépenses</span>
               </NavLink>
-
               <NavLink
                 to="/livreurs"
                 className={({ isActive }) =>
@@ -112,7 +108,6 @@ const Sidebar = () => {
                 <FaTruck />
                 <span>Livreurs</span>
               </NavLink>
-
               <NavLink
                 to="/investissements"
                 className={({ isActive }) =>
@@ -146,7 +141,7 @@ const Sidebar = () => {
               <p className="user-role">{user?.role}</p>
             </div>
           </div>
-          <button className="logout-btn" onClick={handleLogout}>
+          <button className="logout-btn" onClick={logout}>
             <FaSignOutAlt />
             <span>Déconnexion</span>
           </button>
