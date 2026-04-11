@@ -4,10 +4,20 @@ import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import useAppStore from "../../stores/appStore";
 
+const CATEGORIES = [
+  { value: "chaussures", label: "👟 Chaussures" },
+  { value: "robes", label: "👗 Robes / Vêtements" },
+  { value: "autres", label: "📦 Autres" },
+];
+
+const catColor = {
+  chaussures: { bg: "#dbeafe", color: "#1d4ed8", border: "#93c5fd" },
+  robes: { bg: "#fce7f3", color: "#be185d", border: "#f9a8d4" },
+  autres: { bg: "#f3f4f6", color: "#374151", border: "#d1d5db" },
+};
+
 const AjouterProduitPage = () => {
-  console.log(useParams);
-  const { id } = useParams(); // venteId
-  console.log(id);
+  const { id } = useParams();
   const navigate = useNavigate();
   const {
     ajouterProduit,
@@ -22,7 +32,6 @@ const AjouterProduitPage = () => {
   const [loading, setLoading] = useState(false);
   const [venteMode, setVenteMode] = useState("avec_produit");
 
-  // Récupère la vente correspondante
   const vente = ventes.find((v) => v._id === id);
 
   const [formData, setFormData] = useState({
@@ -31,6 +40,7 @@ const AjouterProduitPage = () => {
     nomProduit: "",
     tailleProduit: "",
     prixVente: "",
+    categorie: "autres",
   });
 
   useEffect(() => {
@@ -65,6 +75,7 @@ const AjouterProduitPage = () => {
       nomProduit: formData.nomProduit,
       tailleProduit: formData.tailleProduit,
       prixVente: parseFloat(formData.prixVente),
+      categorie: formData.categorie,
     };
     if (venteMode === "avec_produit" && formData.produit)
       payload.produit = formData.produit;
@@ -81,12 +92,11 @@ const AjouterProduitPage = () => {
 
   const nouveauTotal =
     (vente?.prixVente || 0) + parseFloat(formData.prixVente || 0);
-
   const fmt = (n) => new Intl.NumberFormat("fr-FR").format(n) + " AR";
+  const selectedCat = catColor[formData.categorie] || catColor.autres;
 
   return (
     <div className="main-content">
-      {/* En-tête */}
       <div className="page-header">
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <button
@@ -118,7 +128,6 @@ const AjouterProduitPage = () => {
         </div>
       </div>
 
-      {/* Résumé vente (optionnel) */}
       {vente && (
         <div
           style={{
@@ -156,7 +165,6 @@ const AjouterProduitPage = () => {
         </div>
       )}
 
-      {/* Formulaire dans une card */}
       <div className="card" style={{ maxWidth: 600 }}>
         <div className="card-header">
           <h2
@@ -166,6 +174,39 @@ const AjouterProduitPage = () => {
             <FaPlus style={{ color: "var(--primary-color)" }} />
             Nouveau produit
           </h2>
+        </div>
+
+        {/* Catégorie */}
+        <div className="form-group">
+          <label className="form-label" style={{ fontWeight: 600 }}>
+            Catégorie *
+          </label>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {CATEGORIES.map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setFormData((p) => ({ ...p, categorie: value }))}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                  fontSize: 13,
+                  border: `2px solid ${formData.categorie === value ? catColor[value].border : "var(--border-color)"}`,
+                  background:
+                    formData.categorie === value ? catColor[value].bg : "white",
+                  color:
+                    formData.categorie === value
+                      ? catColor[value].color
+                      : "var(--secondary-color)",
+                  fontWeight: formData.categorie === value ? 600 : 400,
+                  transition: "all 0.2s",
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Mode */}
@@ -298,6 +339,20 @@ const AjouterProduitPage = () => {
               <strong>
                 {new Intl.NumberFormat("fr-FR").format(nouveauTotal)} AR
               </strong>
+              {" · "}
+              <span
+                style={{
+                  padding: "2px 10px",
+                  borderRadius: 12,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  background: selectedCat.bg,
+                  color: selectedCat.color,
+                  border: `1px solid ${selectedCat.border}`,
+                }}
+              >
+                {CATEGORIES.find((c) => c.value === formData.categorie)?.label}
+              </span>
             </div>
           )}
 

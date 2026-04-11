@@ -4,6 +4,11 @@ import { toast } from "react-toastify";
 import useAppStore from "../stores/appStore";
 
 const DESTINATIONS = ["Local", "Antsirabe", "Autre"];
+const CATEGORIES = [
+  { value: "chaussures", label: "👟 Chaussures" },
+  { value: "robes", label: "👗 Robes / Vêtements" },
+  { value: "autres", label: "📦 Autres" },
+];
 
 const VenteForm = () => {
   const navigate = useNavigate();
@@ -41,6 +46,7 @@ const VenteForm = () => {
     tailleProduit: "",
     prixVente: "",
     prixAchat: "",
+    categorie: "chaussures",
     livreur: "",
     fraisLivraison: "0",
     lieuLivraison: "",
@@ -76,6 +82,7 @@ const VenteForm = () => {
         tailleProduit: vente.tailleProduit || "",
         prixVente: vente.prixVente.toString(),
         prixAchat: "",
+        categorie: vente.categorie || "autres",
         livreur: vente.livreur?._id || "",
         fraisLivraison: vente.fraisLivraison.toString(),
         lieuLivraison: vente.lieuLivraison,
@@ -123,6 +130,7 @@ const VenteForm = () => {
       statutLivraison: formData.statutLivraison,
       commentaires: formData.commentaires,
       typeVente,
+      categorie: formData.categorie,
     };
     if (typeVente === "libre" && formData.prixAchat) {
       data.prixAchatProduit = parseFloat(formData.prixAchat) || 0;
@@ -181,13 +189,20 @@ const VenteForm = () => {
         (parseFloat(formData.prixAchat) || 0)
       : null;
 
-  // Expéditions pertinentes selon la destination choisie
   const expeditionsFiltrees = expeditionsEnPrepa.filter(
     (exp) =>
       formData.destinationClient !== "Local" &&
       (exp.destination === formData.destinationClient ||
         exp.destination === "Antsirabe"),
   );
+
+  // Couleur de la catégorie sélectionnée
+  const catColor = {
+    chaussures: { bg: "#dbeafe", color: "#1d4ed8", border: "#93c5fd" },
+    robes: { bg: "#fce7f3", color: "#be185d", border: "#f9a8d4" },
+    autres: { bg: "#f3f4f6", color: "#374151", border: "#d1d5db" },
+  };
+  const selectedCat = catColor[formData.categorie] || catColor.autres;
 
   return (
     <div className="main-content">
@@ -204,17 +219,9 @@ const VenteForm = () => {
           </label>
           <div style={{ display: "flex", gap: 12 }}>
             {[
-              {
-                val: "libre",
-                icon: "🛍️",
-                label: "Directe",
-              },
-              {
-                val: "balle",
-                icon: "📦",
-                label: "Stock",
-              },
-            ].map(({ val, icon, label, desc }) => (
+              { val: "libre", icon: "🛍️", label: "Directe" },
+              { val: "balle", icon: "📦", label: "Stock" },
+            ].map(({ val, icon, label }) => (
               <button
                 key={val}
                 type="button"
@@ -250,16 +257,6 @@ const VenteForm = () => {
               >
                 <div style={{ fontSize: 22, marginBottom: 4 }}>{icon}</div>
                 {label}
-                <div
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 400,
-                    marginTop: 2,
-                    opacity: 0.8,
-                  }}
-                >
-                  {desc}
-                </div>
               </button>
             ))}
           </div>
@@ -268,6 +265,43 @@ const VenteForm = () => {
 
       <div className="card" style={{ maxWidth: 900, margin: "0 auto" }}>
         <form onSubmit={handleSubmit}>
+          {/* ── CATÉGORIE DU PRODUIT ── */}
+          <div className="form-group">
+            <label className="form-label" style={{ fontWeight: 600 }}>
+              Catégorie du produit *
+            </label>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              {CATEGORIES.map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() =>
+                    setFormData((p) => ({ ...p, categorie: value }))
+                  }
+                  style={{
+                    padding: "10px 20px",
+                    borderRadius: 10,
+                    cursor: "pointer",
+                    border: `2px solid ${formData.categorie === value ? catColor[value].border : "var(--border-color)"}`,
+                    background:
+                      formData.categorie === value
+                        ? catColor[value].bg
+                        : "white",
+                    color:
+                      formData.categorie === value
+                        ? catColor[value].color
+                        : "var(--secondary-color)",
+                    fontWeight: formData.categorie === value ? 600 : 400,
+                    fontSize: 14,
+                    transition: "all 0.2s",
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* ── VENTE PAR BALLE ── */}
           {typeVente === "balle" && (
             <>
@@ -378,30 +412,17 @@ const VenteForm = () => {
           {/* ── VENTE LIBRE ── */}
           {typeVente === "libre" && (
             <>
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">Nom du produit *</label>
-                  <input
-                    type="text"
-                    name="nomProduit"
-                    className="form-input"
-                    placeholder="Ex: Robe fleurie"
-                    value={formData.nomProduit}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-                {/*        <div className="form-group">
-                  <label className="form-label">Taille</label>
-                  <input
-                    type="text"
-                    name="tailleProduit"
-                    className="form-input"
-                    placeholder="M"
-                    value={formData.tailleProduit}
-                    onChange={handleChange}
-                  />
-                </div> */}
+              <div className="form-group">
+                <label className="form-label">Nom du produit *</label>
+                <input
+                  type="text"
+                  name="nomProduit"
+                  className="form-input"
+                  placeholder="Ex: Robe fleurie"
+                  value={formData.nomProduit}
+                  onChange={handleChange}
+                  required
+                />
               </div>
               <div className="form-row">
                 <div className="form-group">
@@ -579,7 +600,7 @@ const VenteForm = () => {
             </div>
           )}
 
-          {/* ── LIVRAISON ── */}
+          {/* ── LIVRAISON (mode édition) ── */}
           {isEdit && (
             <div>
               <div
@@ -639,7 +660,7 @@ const VenteForm = () => {
               </div>
             </div>
           )}
-          {/* Fin */}
+
           <div className="form-group">
             <label className="form-label">Commentaires</label>
             <textarea
@@ -660,6 +681,22 @@ const VenteForm = () => {
               marginBottom: 20,
             }}
           >
+            <div className="flex-between mb-10">
+              <span>Catégorie</span>
+              <span
+                style={{
+                  padding: "3px 12px",
+                  borderRadius: 20,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  background: selectedCat.bg,
+                  color: selectedCat.color,
+                  border: `1px solid ${selectedCat.border}`,
+                }}
+              >
+                {CATEGORIES.find((c) => c.value === formData.categorie)?.label}
+              </span>
+            </div>
             <div className="flex-between mb-10">
               <span>Prix de vente</span>
               <strong>{formData.prixVente || 0} AR</strong>
