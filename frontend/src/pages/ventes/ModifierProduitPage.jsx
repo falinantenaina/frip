@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import { FaArrowLeft, FaSave } from "react-icons/fa";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
-import useBalleStore from "../../stores/balleStore";
-import useVenteStore from "../../stores/venteStore";
+import useAppStore from "../../stores/appStore";
 import api from "../../utils/api";
 
 const CATEGORIES = [
@@ -12,26 +11,30 @@ const CATEGORIES = [
   { value: "autres", label: "📦 Autres" },
 ];
 
-const catColor = {
+const CAT_COLORS = {
   chaussures: { bg: "#dbeafe", color: "#1d4ed8", border: "#93c5fd" },
   robes: { bg: "#fce7f3", color: "#be185d", border: "#f9a8d4" },
   autres: { bg: "#f3f4f6", color: "#374151", border: "#d1d5db" },
 };
 
+const fmt = (n) => new Intl.NumberFormat("fr-FR").format(n) + " AR";
+
 /**
+ * Modifier un produit dans une vente.
  * Route : /ventes/:venteId/produits/:produitEntryId/edit
  */
 const ModifierProduitPage = () => {
   const { venteId, produitEntryId } = useParams();
   const navigate = useNavigate();
-  const { ventes, fetchVentes, modifierProduit, loading } = useVenteStore();
-  const { balles, fetchBalles } = useBalleStore();
+  const { ventes, fetchVentes, modifierProduit, balles, fetchBalles } =
+    useAppStore();
+
   const [produitsDisponibles, setProduitsDisponibles] = useState([]);
+  const [formData, setFormData] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const vente = ventes.find((v) => v._id === venteId);
   const produitEntry = vente?.produits?.find((p) => p._id === produitEntryId);
-
-  const [formData, setFormData] = useState(null);
 
   useEffect(() => {
     if (!vente) fetchVentes();
@@ -43,12 +46,11 @@ const ModifierProduitPage = () => {
       const balleId = vente?.balle?._id || vente?.balle || "";
       setFormData({
         balle: balleId,
-        produit: produitEntry.produit?._id || produitEntry.produit || "",
+        produitRef: produitEntry.produit?._id || produitEntry.produit || "",
         nomProduit: produitEntry.nomProduit,
         tailleProduit: produitEntry.tailleProduit || "",
         prixVente: produitEntry.prixVente.toString(),
         prixAchat: (produitEntry.prixAchat || 0).toString(),
-        // FIX: charger la catégorie existante du sous-produit
         categorie: produitEntry.categorie || "autres",
       });
       if (balleId)
@@ -62,34 +64,33 @@ const ModifierProduitPage = () => {
   const loadProduits = async (balleId, produitActuelId) => {
     try {
       const res = await api.get(`/produits/balle/${balleId}/disponibles`);
-      const liste = res.data.data;
-      if (produitActuelId) {
-        const dejaDedans = liste.find((p) => p._id === produitActuelId);
-        if (!dejaDedans) {
-          try {
-            const r2 = await api.get(`/produits/${produitActuelId}`);
-            liste.unshift(r2.data.data);
-          } catch {}
-        }
+      const liste = [...res.data.data];
+      // Inclure le produit actuel même s'il est "vendu"
+      if (produitActuelId && !liste.find((p) => p._id === produitActuelId)) {
+        try {
+          const r2 = await api.get(`/produits/${produitActuelId}`);
+          liste.unshift(r2.data.data);
+        } catch {}
       }
       setProduitsDisponibles(liste);
     } catch (e) {
-      console.error(e);
+      console.error("Erreur chargement produits", e);
     }
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData((p) => ({ ...p, [name]: value }));
+
     if (name === "balle" && value) {
-      loadProduits(value, formData.produit);
+      loadProduits(value, formData.produitRef);
     }
-    if (name === "produit" && value) {
+    if (name === "produitRef" && value) {
       const p = produitsDisponibles.find((p) => p._id === value);
       if (p) {
         setFormData((prev) => ({
           ...prev,
-          produit: value,
+          produitRef: value,
           nomProduit: p.nom,
           tailleProduit: p.taille || "",
           prixVente: p.prixVente.toString(),
@@ -100,19 +101,22 @@ const ModifierProduitPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSubmitting(true);
+
     const payload = {
       nomProduit: formData.nomProduit,
       tailleProduit: formData.tailleProduit,
       prixVente: parseFloat(formData.prixVente),
-      prixAchat: parseFloat(formData.prixAchat),
-      // FIX: envoyer la catégorie
+      prixAchat: parseFloat(formData.prixAchat) || 0,
       categorie: formData.categorie,
     };
-    if (formData.produit) payload.produit = formData.produit;
+    if (formData.produitRef) payload.produit = formData.produitRef;
 
     const result = await modifierProduit(venteId, produitEntryId, payload);
+    setSubmitting(false);
+
     if (result.success) {
-      toast.success("Produit modifié avec succès ✅");
+      toast.success("Produit modifié ✅");
       navigate("/ventes");
     } else {
       toast.error(result.message || "Erreur lors de la modification");
@@ -129,7 +133,10 @@ const ModifierProduitPage = () => {
     );
   }
 
-  const selectedCat = catColor[formData.categorie] || catColor.autres;
+  const prixVenteNum = Number(formData.prixVente) || 0;
+  const prixAchatNum = Number(formData.prixAchat) || 0;
+  const benefice = prixVenteNum - prixAchatNum;
+  const selectedCat = CAT_COLORS[formData.categorie] || CAT_COLORS.autres;
 
   return (
     <div className="main-content">
@@ -160,13 +167,13 @@ const ModifierProduitPage = () => {
         </div>
       </div>
 
-      {/* Résumé produit actuel */}
+      {/* Produit actuel */}
       <div
         style={{
           background: "#eff6ff",
           border: "1px solid #bfdbfe",
           borderRadius: 8,
-          padding: "12px 18px",
+          padding: "12px 20px",
           marginBottom: 24,
           display: "flex",
           gap: 24,
@@ -176,19 +183,25 @@ const ModifierProduitPage = () => {
         }}
       >
         <span>
-          Produit actuel : <strong>{produitEntry.nomProduit}</strong>
+          Produit : <strong>{produitEntry.nomProduit}</strong>
           {produitEntry.tailleProduit && (
             <span> · {produitEntry.tailleProduit}</span>
           )}
         </span>
         <span>
-          Prix actuel :{" "}
+          Prix vente : <strong>{fmt(produitEntry.prixVente)}</strong>
+        </span>
+        <span>
+          Prix achat : <strong>{fmt(produitEntry.prixAchat || 0)}</strong>
+        </span>
+        <span>
+          Bénéfice :{" "}
           <strong>
-            {new Intl.NumberFormat("fr-FR").format(produitEntry.prixVente)} AR
+            {fmt((produitEntry.prixVente || 0) - (produitEntry.prixAchat || 0))}
           </strong>
         </span>
         <span>
-          Catégorie actuelle :{" "}
+          Catégorie :{" "}
           <strong>
             {CATEGORIES.find((c) => c.value === produitEntry.categorie)
               ?.label || "Autres"}
@@ -196,7 +209,7 @@ const ModifierProduitPage = () => {
         </span>
       </div>
 
-      <div className="card" style={{ maxWidth: 600 }}>
+      <div className="card" style={{ maxWidth: 620 }}>
         <div className="card-header">
           <h2
             className="card-title"
@@ -208,57 +221,51 @@ const ModifierProduitPage = () => {
         </div>
 
         <form onSubmit={handleSubmit}>
-          {/* FIX: Sélecteur de catégorie */}
+          {/* Catégorie */}
           <div className="form-group">
             <label className="form-label" style={{ fontWeight: 600 }}>
-              Catégorie du produit *
+              Catégorie *
             </label>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {CATEGORIES.map(({ value, label }) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() =>
-                    setFormData((p) => ({ ...p, categorie: value }))
-                  }
-                  style={{
-                    padding: "8px 16px",
-                    borderRadius: 8,
-                    cursor: "pointer",
-                    fontSize: 13,
-                    border: `2px solid ${
-                      formData.categorie === value
-                        ? catColor[value].border
-                        : "var(--border-color)"
-                    }`,
-                    background:
-                      formData.categorie === value
-                        ? catColor[value].bg
-                        : "white",
-                    color:
-                      formData.categorie === value
-                        ? catColor[value].color
-                        : "var(--secondary-color)",
-                    fontWeight: formData.categorie === value ? 600 : 400,
-                    transition: "all 0.2s",
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
+              {CATEGORIES.map(({ value, label }) => {
+                const c = CAT_COLORS[value];
+                const sel = formData.categorie === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() =>
+                      setFormData((p) => ({ ...p, categorie: value }))
+                    }
+                    style={{
+                      padding: "8px 16px",
+                      borderRadius: 8,
+                      cursor: "pointer",
+                      fontSize: 13,
+                      transition: "all 0.2s",
+                      border: `2px solid ${sel ? c.border : "var(--border-color)"}`,
+                      background: sel ? c.bg : "white",
+                      color: sel ? c.color : "var(--secondary-color)",
+                      fontWeight: sel ? 600 : 400,
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {/* Balle */}
+          {/* Changer de balle/produit */}
           <div className="form-group">
-            <label className="form-label">Balle</label>
+            <label className="form-label">Balle (optionnel)</label>
             <select
               name="balle"
               className="form-select"
               value={formData.balle}
               onChange={handleChange}
             >
-              <option value="">Sélectionner une balle</option>
+              <option value="">Aucune balle sélectionnée</option>
               {balles.map((b) => (
                 <option key={b._id} value={b._id}>
                   {b.nom} – {b.numero}
@@ -267,18 +274,16 @@ const ModifierProduitPage = () => {
             </select>
           </div>
 
-          {/* Changer de produit (optionnel) */}
           {formData.balle && (
             <div className="form-group">
               <label className="form-label">
                 Changer de produit (optionnel)
               </label>
               <select
-                name="produit"
+                name="produitRef"
                 className="form-select"
-                value={formData.produit}
+                value={formData.produitRef}
                 onChange={handleChange}
-                disabled={!formData.balle}
               >
                 <option value="">Garder le produit actuel</option>
                 {produitsDisponibles.map((p) => (
@@ -290,7 +295,7 @@ const ModifierProduitPage = () => {
             </div>
           )}
 
-          {/* Nom + Taille */}
+          {/* Nom + taille */}
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Nom du produit *</label>
@@ -323,9 +328,9 @@ const ModifierProduitPage = () => {
                 type="number"
                 name="prixVente"
                 className="form-input"
+                min="0"
                 value={formData.prixVente}
                 onChange={handleChange}
-                min="0"
                 required
               />
             </div>
@@ -335,42 +340,68 @@ const ModifierProduitPage = () => {
                 type="number"
                 name="prixAchat"
                 className="form-input"
+                min="0"
                 value={formData.prixAchat}
                 onChange={handleChange}
-                min="0"
               />
             </div>
           </div>
 
-          {/* Indicateur catégorie sélectionnée */}
+          {/* Récapitulatif */}
           <div
             style={{
               background: selectedCat.bg,
               border: `1px solid ${selectedCat.border}`,
               borderRadius: 8,
-              padding: "8px 14px",
-              fontSize: 13,
-              color: selectedCat.color,
-              marginBottom: 16,
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
+              padding: "10px 16px",
+              marginBottom: 20,
+              display: "grid",
+              gridTemplateColumns: "repeat(3, 1fr)",
+              gap: 10,
             }}
           >
-            <span>Catégorie sélectionnée :</span>
-            <strong>
-              {CATEGORIES.find((c) => c.value === formData.categorie)?.label}
-            </strong>
+            <div>
+              <div style={{ fontSize: 11, color: "var(--secondary-color)" }}>
+                Catégorie
+              </div>
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: selectedCat.color,
+                }}
+              >
+                {CATEGORIES.find((c) => c.value === formData.categorie)?.label}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: "var(--secondary-color)" }}>
+                Bénéfice estimé
+              </div>
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: benefice >= 0 ? "#166534" : "#dc2626",
+                }}
+              >
+                {fmt(benefice)}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: "var(--secondary-color)" }}>
+                Marge
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>
+                {prixVenteNum > 0
+                  ? Math.round((benefice / prixVenteNum) * 100)
+                  : 0}
+                %
+              </div>
+            </div>
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              gap: 10,
-              marginTop: 8,
-            }}
-          >
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
             <button
               type="button"
               className="btn btn-secondary"
@@ -381,10 +412,10 @@ const ModifierProduitPage = () => {
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={loading}
+              disabled={submitting}
             >
               <FaSave />
-              {loading ? "Enregistrement..." : "Enregistrer"}
+              {submitting ? "Enregistrement..." : "Enregistrer"}
             </button>
           </div>
         </form>

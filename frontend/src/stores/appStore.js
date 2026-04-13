@@ -143,16 +143,16 @@ const useAppStore = create((set, get) => ({
     try {
       const cleanFilters = Object.fromEntries(
         Object.entries(filters).filter(
-          ([_, value]) => value !== undefined && value !== null && value !== "",
+          ([_, v]) => v !== undefined && v !== null && v !== "",
         ),
       );
-
       const params = new URLSearchParams(cleanFilters).toString();
       const res = await api.get(`/ventes${params ? `?${params}` : ""}`);
       set({ ventes: res.data.data });
       get()._setLastFetch("ventes");
       return { success: true };
     } catch (e) {
+      get()._setError("ventes", e.response?.data?.message);
       return { success: false, message: e.response?.data?.message };
     } finally {
       get()._setLoading("ventes", false);
@@ -168,25 +168,23 @@ const useAppStore = create((set, get) => ({
     }
   },
 
+  /** Créer une nouvelle vente */
   createVente: async (data) => {
     try {
       const res = await api.post("/ventes", data);
-      const { venteFusionnee, data: newVente } = res.data;
-      set((s) => ({
-        ventes: venteFusionnee
-          ? s.ventes.map((v) => (v._id === newVente._id ? newVente : v))
-          : [newVente, ...s.ventes],
-      }));
+      const newVente = res.data.data;
+      set((s) => ({ ventes: [newVente, ...s.ventes] }));
       // Invalider cache balles si vente par balle
-      if (data.typeVente !== "libre") {
+      if (data.typeVente === "balle") {
         set((s) => ({ _lastFetch: { ...s._lastFetch, balles: 0 } }));
       }
-      return { success: true, data: newVente, venteFusionnee };
+      return { success: true, data: newVente };
     } catch (e) {
       return { success: false, message: e.response?.data?.message };
     }
   },
 
+  /** Modifier les infos générales d'une vente (pas les produits) */
   updateVente: async (id, data) => {
     try {
       const res = await api.put(`/ventes/${id}`, data);
@@ -199,6 +197,54 @@ const useAppStore = create((set, get) => ({
     }
   },
 
+  /** Ajouter un produit à une vente existante */
+  ajouterProduit: async (venteId, data) => {
+    try {
+      const res = await api.post(`/ventes/${venteId}/produits`, data);
+      set((s) => ({
+        ventes: s.ventes.map((v) => (v._id === venteId ? res.data.data : v)),
+      }));
+      if (data.typeVente === "balle" || res.data.data?.balle) {
+        set((s) => ({ _lastFetch: { ...s._lastFetch, balles: 0 } }));
+      }
+      return { success: true, data: res.data.data };
+    } catch (e) {
+      return { success: false, message: e.response?.data?.message };
+    }
+  },
+
+  /** Modifier un produit dans une vente */
+  modifierProduit: async (venteId, produitEntryId, data) => {
+    try {
+      const res = await api.put(
+        `/ventes/${venteId}/produits/${produitEntryId}`,
+        data,
+      );
+      set((s) => ({
+        ventes: s.ventes.map((v) => (v._id === venteId ? res.data.data : v)),
+      }));
+      return { success: true, data: res.data.data };
+    } catch (e) {
+      return { success: false, message: e.response?.data?.message };
+    }
+  },
+
+  /** Supprimer un produit d'une vente */
+  supprimerProduit: async (venteId, produitEntryId) => {
+    try {
+      const res = await api.delete(
+        `/ventes/${venteId}/produits/${produitEntryId}`,
+      );
+      set((s) => ({
+        ventes: s.ventes.map((v) => (v._id === venteId ? res.data.data : v)),
+      }));
+      return { success: true };
+    } catch (e) {
+      return { success: false, message: e.response?.data?.message };
+    }
+  },
+
+  /** Annuler une vente */
   annulerVente: async (id, raisonAnnulation) => {
     try {
       const res = await api.put(`/ventes/${id}/annuler`, { raisonAnnulation });
@@ -212,6 +258,7 @@ const useAppStore = create((set, get) => ({
     }
   },
 
+  /** Supprimer une vente */
   deleteVente: async (id) => {
     try {
       await api.delete(`/ventes/${id}`);
@@ -225,7 +272,7 @@ const useAppStore = create((set, get) => ({
 
   ajouterProduit: async (venteId, data) => {
     try {
-      const res = await api.post(`/ventes/${venteId}/ajouter-produit`, data);
+      const res = await api.post(`/ventes/${venteId}/produits`, data);
       set((s) => ({
         ventes: s.ventes.map((v) => (v._id === venteId ? res.data.data : v)),
       }));

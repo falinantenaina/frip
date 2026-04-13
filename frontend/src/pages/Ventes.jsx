@@ -16,6 +16,7 @@ import {
   FaChevronUp,
   FaEdit,
   FaPlus,
+  FaSearch,
   FaTrash,
 } from "react-icons/fa";
 import { Link, useNavigate } from "react-router-dom";
@@ -61,7 +62,7 @@ const CATEGORIES_CONFIG = [
   },
 ];
 
-const fmt = (n) => new Intl.NumberFormat("fr-FR").format(n) + " AR";
+const fmt = (n) => new Intl.NumberFormat("fr-FR").format(n) + " Ar";
 const fmtDate = (d) => format(new Date(d), "dd/MM/yyyy", { locale: fr });
 
 const getStatutClass = (s) =>
@@ -115,6 +116,28 @@ const CategorieBadge = ({ categorie }) => {
   );
 };
 
+const BeneficePill = ({ value, size = 11 }) => {
+  const pos = value >= 0;
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        padding: "2px 7px",
+        borderRadius: 10,
+        fontSize: size,
+        fontWeight: 700,
+        background: pos ? "#dcfce7" : "#fee2e2",
+        color: pos ? "#166534" : "#dc2626",
+        border: `1px solid ${pos ? "#bbf7d0" : "#fecaca"}`,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {pos ? "+" : ""}
+      {fmt(value)}
+    </span>
+  );
+};
+
 const Ventes = () => {
   const {
     ventes,
@@ -135,8 +158,6 @@ const Ventes = () => {
   const [activeCategory, setActiveCategory] = useState("toutes");
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
 
-  console.log(ventes);
-
   useEffect(() => {
     fetchVentes();
   }, []);
@@ -153,6 +174,7 @@ const Ventes = () => {
     fetchVentes({ statutLivraison: filterStatut || undefined }, true);
   }, [filterStatut]);
 
+  // FIX scroll : type="button" sur tous les boutons hors formulaire
   const toggleExpand = (id) =>
     setExpandedVentes((prev) => {
       const n = new Set(prev);
@@ -199,7 +221,6 @@ const Ventes = () => {
       : toast.error(r.message || "Erreur");
   };
 
-  /* ── Filtrage ─────────────────────────────────────────────────────────── */
   const ventesFiltered = ventes.filter((v) => {
     if (filterStatut && v.statutLivraison !== filterStatut) return false;
     if (searchTerm) {
@@ -226,47 +247,50 @@ const Ventes = () => {
     return true;
   });
 
-  /* compteurs onglets */
   const counts = {};
-  const totals = {};
   CATEGORIES_CONFIG.forEach(({ key }) => {
     const list =
       key === "toutes"
         ? ventes
         : ventes.filter((v) => getCategorieVente(v) === key);
     counts[key] = list.length;
-    totals[key] = list
-      .filter((v) => v.statutLivraison !== "annulé")
-      .reduce((s, v) => s + (v.prixVente || 0), 0);
   });
 
   const totalFiltre = ventesFiltered.reduce(
     (acc, v) => acc + (v.montantTotal || 0),
     0,
   );
+  const beneficeFiltre = ventesFiltered
+    .filter((v) => v.statutLivraison !== "annulé")
+    .reduce((acc, v) => acc + (v.totalBenefice || 0), 0);
 
-  const PBtn = ({ value, label }) => (
-    <button
-      onClick={() => {
-        setFilterPeriode(value);
-        setFilterDateSpec("");
-      }}
-      style={{
-        padding: "6px 10px",
-        borderRadius: 6,
-        cursor: "pointer",
-        fontSize: 12,
-        border:
-          filterPeriode === value ? "none" : "1px solid var(--border-color)",
-        background: filterPeriode === value ? "var(--primary-color)" : "white",
-        color: filterPeriode === value ? "white" : "var(--secondary-color)",
-        fontWeight: filterPeriode === value ? 600 : 400,
-        whiteSpace: "nowrap",
-      }}
-    >
-      {label}
-    </button>
-  );
+  const PBtn = ({ value, label }) => {
+    const active = filterPeriode === value;
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setFilterPeriode(value);
+          setFilterDateSpec("");
+        }}
+        style={{
+          padding: "6px 12px",
+          borderRadius: 8,
+          cursor: "pointer",
+          fontSize: 12,
+          border: active ? "none" : "1.5px solid #e2e8f0",
+          background: active ? "#2563eb" : "white",
+          color: active ? "white" : "#64748b",
+          fontWeight: active ? 700 : 500,
+          whiteSpace: "nowrap",
+          boxShadow: active ? "0 2px 6px rgba(37,99,235,0.25)" : "none",
+          transition: "all 0.15s",
+        }}
+      >
+        {label}
+      </button>
+    );
+  };
 
   if (loading.ventes && ventes.length === 0)
     return (
@@ -277,7 +301,7 @@ const Ventes = () => {
       </div>
     );
 
-  /* ── Carte mobile ─────────────────────────────────────────────────────── */
+  // ── Carte mobile ────────────────────────────────────────────────────────────
   const VenteCard = ({ vente }) => {
     const grouped = isGroupee(vente);
     const expanded = expandedVentes.has(vente._id);
@@ -288,46 +312,39 @@ const Ventes = () => {
       <div
         style={{
           background: "white",
-          borderRadius: 12,
-          boxShadow: "var(--shadow)",
+          borderRadius: 14,
+          border: "1.5px solid #e2e8f0",
+          boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
           marginBottom: 10,
           overflow: "hidden",
-          borderLeft: `4px solid ${grouped ? "#2563eb" : "var(--border-color)"}`,
+          borderLeft: `4px solid ${grouped ? "#2563eb" : "#e2e8f0"}`,
         }}
       >
-        <div style={{ padding: "11px 13px" }}>
-          {/* Ligne 1 : client + statut */}
+        <div style={{ padding: "12px 14px" }}>
           <div
             style={{
               display: "flex",
               justifyContent: "space-between",
               alignItems: "flex-start",
               gap: 8,
-              marginBottom: 5,
+              marginBottom: 6,
             }}
           >
-            <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <div
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 5,
+                  gap: 6,
                   flexWrap: "wrap",
                 }}
               >
-                <strong
-                  style={{
-                    fontSize: 14,
-                    color: "var(--dark-color)",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
+                <strong style={{ fontSize: 14, color: "#0f172a" }}>
                   {vente.nomClient}
                 </strong>
                 {canAdd && (
                   <button
+                    type="button"
                     onClick={() =>
                       navigate(`/ventes/${vente._id}/ajouter-produit`)
                     }
@@ -336,8 +353,8 @@ const Ventes = () => {
                       color: "white",
                       border: "none",
                       borderRadius: "50%",
-                      width: 19,
-                      height: 19,
+                      width: 20,
+                      height: 20,
                       flexShrink: 0,
                       display: "flex",
                       alignItems: "center",
@@ -350,17 +367,12 @@ const Ventes = () => {
                   </button>
                 )}
               </div>
-              <div
-                style={{
-                  fontSize: 11,
-                  color: "var(--secondary-color)",
-                  marginTop: 1,
-                }}
-              >
+              <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>
                 {vente.telephoneClient} · {fmtDate(vente.dateVente)}
               </div>
             </div>
             <button
+              type="button"
               className={`status-badge ${getStatutClass(vente.statutLivraison)}`}
               onClick={() =>
                 handleChangeStatut(vente._id, vente.statutLivraison)
@@ -381,21 +393,20 @@ const Ventes = () => {
             </button>
           </div>
 
-          {/* Ligne 2 : catégorie + produit */}
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 5,
+              gap: 6,
               flexWrap: "wrap",
-              marginBottom: 5,
+              marginBottom: 8,
             }}
           >
             <CategorieBadge categorie={catVente} />
             <span
               style={{
                 fontSize: 13,
-                color: "var(--dark-color)",
+                color: "#1e293b",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
@@ -411,14 +422,13 @@ const Ventes = () => {
                     fontWeight: 600,
                   }}
                 >
-                  <FaBoxOpen />
-                  {vente.produits.length} produits
+                  <FaBoxOpen size={12} /> {vente.produits.length} produits
                 </span>
               ) : (
                 <>
                   {vente.nomProduit}
                   {vente.tailleProduit && (
-                    <span style={{ color: "var(--secondary-color)" }}>
+                    <span style={{ color: "#94a3b8" }}>
                       {" "}
                       · {vente.tailleProduit}
                     </span>
@@ -428,36 +438,65 @@ const Ventes = () => {
             </span>
           </div>
 
-          {/* Ligne 3 : montants */}
+          <div
+            style={{
+              background: "#f8fafc",
+              borderRadius: 10,
+              padding: "8px 12px",
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr 1fr",
+              gap: 6,
+              marginBottom: 8,
+            }}
+          >
+            {[
+              { label: "Vente", value: vente.prixVente, color: "#1d4ed8" },
+              { label: "Achat", value: vente.totalAchat, color: "#92400e" },
+              {
+                label: "Total",
+                value: vente.montantTotal,
+                color: "#059669",
+                bold: true,
+              },
+            ].map(({ label, value, color, bold }) => (
+              <div key={label}>
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: "#94a3b8",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    marginBottom: 2,
+                  }}
+                >
+                  {label}
+                </div>
+                <div
+                  style={{ fontSize: 12, fontWeight: bold ? 800 : 600, color }}
+                >
+                  {fmt(value || 0)}
+                </div>
+              </div>
+            ))}
+          </div>
+
           <div
             style={{
               display: "flex",
-              gap: 10,
-              flexWrap: "wrap",
-              fontSize: 12,
-              marginBottom: 7,
+              alignItems: "center",
+              gap: 6,
+              marginBottom: 8,
             }}
           >
-            <span style={{ color: "var(--secondary-color)" }}>
-              Vente&nbsp;:{" "}
-              <strong style={{ color: "var(--dark-color)" }}>
-                {fmt(vente.prixVente)}
-              </strong>
-            </span>
+            <span style={{ fontSize: 11, color: "#94a3b8" }}>Bénéfice :</span>
+            <BeneficePill value={vente.totalBenefice || 0} size={12} />
             {vente.fraisLivraison > 0 && (
-              <span style={{ color: "var(--secondary-color)" }}>
-                Frais&nbsp;: <strong>{fmt(vente.fraisLivraison)}</strong>
+              <span style={{ fontSize: 11, color: "#94a3b8" }}>
+                · Frais : <strong>{fmt(vente.fraisLivraison)}</strong>
               </span>
             )}
-            <span style={{ color: "var(--secondary-color)" }}>
-              Total&nbsp;:{" "}
-              <strong style={{ color: "var(--success-color)" }}>
-                {fmt(vente.montantTotal)}
-              </strong>
-            </span>
           </div>
 
-          {/* Ligne 4 : livreur + actions */}
           <div
             style={{
               display: "flex",
@@ -465,19 +504,20 @@ const Ventes = () => {
               alignItems: "center",
             }}
           >
-            <span style={{ fontSize: 11, color: "var(--secondary-color)" }}>
+            <span style={{ fontSize: 11, color: "#94a3b8" }}>
               {vente.livreur ? `🚚 ${vente.livreur.nom}` : "Pas de livreur"}
             </span>
             <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
               {grouped && (
                 <button
+                  type="button"
                   onClick={() => toggleExpand(vente._id)}
                   style={{
                     background: "#dbeafe",
                     color: "#1d4ed8",
                     border: "none",
                     borderRadius: 6,
-                    padding: "4px 7px",
+                    padding: "4px 8px",
                     cursor: "pointer",
                     fontSize: 11,
                     display: "flex",
@@ -485,7 +525,11 @@ const Ventes = () => {
                     gap: 3,
                   }}
                 >
-                  {expanded ? <FaChevronUp /> : <FaChevronDown />}
+                  {expanded ? (
+                    <FaChevronUp size={10} />
+                  ) : (
+                    <FaChevronDown size={10} />
+                  )}
                   {expanded ? "Masquer" : "Voir"}
                 </button>
               )}
@@ -497,6 +541,7 @@ const Ventes = () => {
               </Link>
               {vente.statutLivraison !== "annulé" && (
                 <button
+                  type="button"
                   className="btn btn-sm btn-icon btn-danger"
                   onClick={() => handleAnnuler(vente._id)}
                 >
@@ -504,6 +549,7 @@ const Ventes = () => {
                 </button>
               )}
               <button
+                type="button"
                 className="btn btn-sm btn-icon btn-danger"
                 onClick={() => handleDelete(vente._id, vente.nomClient)}
               >
@@ -513,22 +559,18 @@ const Ventes = () => {
           </div>
         </div>
 
-        {/* Sous-produits */}
         {grouped && expanded && (
           <div
-            style={{
-              borderTop: "1px solid var(--border-color)",
-              background: "#f8fafc",
-            }}
+            style={{ borderTop: "1px solid #e2e8f0", background: "#f8fafc" }}
           >
             {vente.produits.map((pe, idx) => (
               <div
                 key={pe._id || idx}
                 style={{
-                  padding: "8px 13px",
+                  padding: "10px 14px",
                   borderBottom:
                     idx < vente.produits.length - 1
-                      ? "1px solid var(--border-color)"
+                      ? "1px solid #e2e8f0"
                       : "none",
                   display: "flex",
                   justifyContent: "space-between",
@@ -537,26 +579,13 @@ const Ventes = () => {
                 }}
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 600,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>
                     <span style={{ color: "#94a3b8", marginRight: 4 }}>
                       #{idx + 1}
                     </span>
                     {pe.nomProduit}
                     {pe.tailleProduit && (
-                      <span
-                        style={{
-                          color: "var(--secondary-color)",
-                          fontWeight: 400,
-                        }}
-                      >
+                      <span style={{ color: "#94a3b8", fontWeight: 400 }}>
                         {" "}
                         · {pe.tailleProduit}
                       </span>
@@ -567,20 +596,28 @@ const Ventes = () => {
                       display: "flex",
                       gap: 6,
                       alignItems: "center",
-                      marginTop: 3,
+                      marginTop: 4,
+                      flexWrap: "wrap",
                     }}
                   >
-                    <span
-                      style={{ fontSize: 12, color: "var(--secondary-color)" }}
-                    >
-                      {fmt(pe.prixVente)}
-                    </span>
                     <CategorieBadge categorie={pe.categorie || "autres"} />
+                    <span style={{ fontSize: 11, color: "#64748b" }}>
+                      V : <strong>{fmt(pe.prixVente)}</strong>
+                    </span>
+                    <span style={{ fontSize: 11, color: "#92400e" }}>
+                      A : <strong>{fmt(pe.prixAchat || 0)}</strong>
+                    </span>
+                    <BeneficePill
+                      value={
+                        pe.benefice ?? (pe.prixVente || 0) - (pe.prixAchat || 0)
+                      }
+                    />
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
                   {vente.statutLivraison !== "annulé" && (
                     <button
+                      type="button"
                       className="btn btn-sm btn-icon btn-secondary"
                       onClick={() =>
                         navigate(`/ventes/${vente._id}/produits/${pe._id}/edit`)
@@ -592,6 +629,7 @@ const Ventes = () => {
                   {vente.produits.length > 1 &&
                     vente.statutLivraison !== "annulé" && (
                       <button
+                        type="button"
                         className="btn btn-sm btn-icon btn-danger"
                         onClick={() =>
                           handleSupprimerProduit(
@@ -613,23 +651,41 @@ const Ventes = () => {
     );
   };
 
-  /* ── Render ───────────────────────────────────────────────────────────── */
   return (
     <div className="main-content">
-      {/* Header */}
       <div className="page-header">
-        <h1 className="page-title">Ventes</h1>
-        <Link to="/ventes/new" className="btn btn-primary">
-          <FaPlus /> {!isMobile && "Nouvelle vente"}
+        <div>
+          <h1 className="page-title">Ventes</h1>
+          <p style={{ fontSize: 13, color: "#94a3b8", marginTop: 2 }}>
+            {ventes.length} vente{ventes.length > 1 ? "s" : ""} au total
+          </p>
+        </div>
+        <Link
+          to="/ventes/new"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "10px 18px",
+            borderRadius: 10,
+            textDecoration: "none",
+            background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
+            color: "white",
+            fontSize: 14,
+            fontWeight: 700,
+            boxShadow: "0 4px 14px rgba(37,99,235,0.3)",
+          }}
+        >
+          <FaPlus size={12} /> {!isMobile && "Nouvelle vente"}
         </Link>
       </div>
 
-      {/* ── Onglets catégories — scroll horizontal sur mobile ─────────── */}
+      {/* Onglets catégories */}
       <div
         style={{
           display: "flex",
           gap: 6,
-          marginBottom: 12,
+          marginBottom: 14,
           overflowX: "auto",
           paddingBottom: 4,
           WebkitOverflowScrolling: "touch",
@@ -641,22 +697,23 @@ const Ventes = () => {
           return (
             <button
               key={cfg.key}
+              type="button"
               onClick={() => setActiveCategory(cfg.key)}
               style={{
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
                 gap: 3,
-                padding: "8px 12px",
-                borderRadius: 10,
+                padding: "8px 14px",
+                borderRadius: 12,
                 cursor: "pointer",
                 border: active
                   ? `2px solid ${cfg.border}`
                   : "2px solid transparent",
                 background: active ? cfg.lightBg : "white",
                 boxShadow: active
-                  ? `0 2px 6px ${cfg.color}25`
-                  : "0 1px 3px rgba(0,0,0,0.08)",
+                  ? `0 2px 8px ${cfg.color}22`
+                  : "0 1px 3px rgba(0,0,0,0.07)",
                 transition: "all 0.15s",
                 flexShrink: 0,
                 minWidth: isMobile ? 76 : 100,
@@ -668,21 +725,19 @@ const Ventes = () => {
                   style={{
                     fontSize: isMobile ? 11 : 12,
                     fontWeight: active ? 700 : 500,
-                    color: active ? cfg.text : "var(--secondary-color)",
+                    color: active ? cfg.text : "#64748b",
                     whiteSpace: "nowrap",
                   }}
                 >
                   {isMobile && cfg.key !== "toutes"
-                    ? cfg.label.split(
-                        " ",
-                      )[0] /* "Chaussures", "Robes", "Autres" sur mobile */
+                    ? cfg.label.split(" ")[0]
                     : cfg.label}
                 </span>
               </div>
               <span
                 style={{
                   background: active ? cfg.color : "#e2e8f0",
-                  color: active ? "white" : "var(--secondary-color)",
+                  color: active ? "white" : "#64748b",
                   borderRadius: 20,
                   padding: "0px 6px",
                   fontSize: 10,
@@ -696,14 +751,14 @@ const Ventes = () => {
         })}
       </div>
 
-      {/* ── Mini-stats (vue Toutes uniquement) ────────────────────────── */}
+      {/* Mini-stats */}
       {activeCategory === "toutes" && (
         <div
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(3, 1fr)",
             gap: isMobile ? 6 : 10,
-            marginBottom: 12,
+            marginBottom: 14,
           }}
         >
           {CATEGORIES_CONFIG.filter((c) => c.key !== "toutes").map((cfg) => {
@@ -713,18 +768,21 @@ const Ventes = () => {
                 v.statutLivraison !== "annulé",
             );
             const total = list.reduce((s, v) => s + (v.prixVente || 0), 0);
+            const ben = list.reduce((s, v) => s + (v.totalBenefice || 0), 0);
             return (
               <button
                 key={cfg.key}
+                type="button"
                 onClick={() => setActiveCategory(cfg.key)}
                 style={{
                   background: cfg.lightBg,
-                  border: `1px solid ${cfg.border}`,
-                  borderRadius: 10,
-                  padding: isMobile ? "8px 8px" : "10px 14px",
+                  border: `1.5px solid ${cfg.border}`,
+                  borderRadius: 12,
+                  padding: isMobile ? "8px 10px" : "12px 16px",
                   cursor: "pointer",
                   textAlign: "left",
                   width: "100%",
+                  transition: "all 0.15s",
                 }}
               >
                 <div
@@ -732,7 +790,7 @@ const Ventes = () => {
                     fontSize: isMobile ? 12 : 13,
                     fontWeight: 700,
                     color: cfg.text,
-                    marginBottom: 2,
+                    marginBottom: 3,
                   }}
                 >
                   {cfg.icon} {isMobile ? cfg.label.split(" ")[0] : cfg.label}
@@ -741,8 +799,8 @@ const Ventes = () => {
                   style={{
                     fontSize: 10,
                     color: cfg.text,
-                    opacity: 0.75,
-                    marginBottom: 2,
+                    opacity: 0.7,
+                    marginBottom: 3,
                   }}
                 >
                   {list.length} vente{list.length > 1 ? "s" : ""}
@@ -754,31 +812,53 @@ const Ventes = () => {
                     color: cfg.text,
                   }}
                 >
-                  {new Intl.NumberFormat("fr-FR").format(total)} AR
+                  {new Intl.NumberFormat("fr-FR").format(total)} Ar
                 </div>
+                {!isMobile && (
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: ben >= 0 ? "#166534" : "#dc2626",
+                      marginTop: 2,
+                      fontWeight: 600,
+                    }}
+                  >
+                    Bén. : {new Intl.NumberFormat("fr-FR").format(ben)} Ar
+                  </div>
+                )}
               </button>
             );
           })}
         </div>
       )}
 
-      {/* ── Filtres ───────────────────────────────────────────────────── */}
+      {/* Filtres */}
       <div
         style={{
           background: "white",
-          padding: "11px 13px",
-          borderRadius: 8,
-          boxShadow: "var(--shadow)",
-          marginBottom: 10,
+          padding: "12px 14px",
+          borderRadius: 12,
+          border: "1.5px solid #e2e8f0",
+          boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+          marginBottom: 12,
           display: "flex",
           flexDirection: "column",
-          gap: 8,
+          gap: 10,
         }}
       >
-        <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <select
-            className="form-select"
-            style={{ flex: "0 0 auto", width: 135, fontSize: 13 }}
+            style={{
+              flex: "0 0 auto",
+              width: 140,
+              fontSize: 13,
+              padding: "9px 12px",
+              border: "1.5px solid #e2e8f0",
+              borderRadius: 8,
+              background: "#f8fafc",
+              color: "#1e293b",
+              outline: "none",
+            }}
             value={filterStatut}
             onChange={(e) => setFilterStatut(e.target.value)}
           >
@@ -788,19 +868,41 @@ const Ventes = () => {
             <option value="livré">Livré</option>
             <option value="annulé">Annulé</option>
           </select>
-          <input
-            type="text"
-            className="form-input"
-            style={{ flex: 1, minWidth: 100, fontSize: 13 }}
-            placeholder="Rechercher client, produit…"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+          <div style={{ flex: 1, minWidth: 120, position: "relative" }}>
+            <FaSearch
+              style={{
+                position: "absolute",
+                left: 11,
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "#94a3b8",
+                fontSize: 12,
+                pointerEvents: "none",
+              }}
+            />
+            <input
+              type="text"
+              style={{
+                width: "100%",
+                fontSize: 13,
+                padding: "9px 12px 9px 32px",
+                border: "1.5px solid #e2e8f0",
+                borderRadius: 8,
+                background: "#f8fafc",
+                color: "#1e293b",
+                outline: "none",
+                boxSizing: "border-box",
+              }}
+              placeholder="Rechercher client, produit…"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
         </div>
         <div
           style={{
             display: "flex",
-            gap: 5,
+            gap: 6,
             flexWrap: "wrap",
             alignItems: "center",
           }}
@@ -811,16 +913,18 @@ const Ventes = () => {
           <PBtn value="mois" label="Mois" />
           <input
             type="date"
-            className="form-input"
             style={{
-              padding: "5px 8px",
+              padding: "6px 10px",
               fontSize: 12,
               width: isMobile ? "100%" : 145,
               border:
                 filterPeriode === "date"
-                  ? "2px solid var(--primary-color)"
-                  : "1px solid var(--border-color)",
-              borderRadius: 6,
+                  ? "2px solid #2563eb"
+                  : "1.5px solid #e2e8f0",
+              borderRadius: 8,
+              background: "#f8fafc",
+              color: "#1e293b",
+              outline: "none",
             }}
             value={filterDateSpec}
             onChange={(e) => {
@@ -831,19 +935,21 @@ const Ventes = () => {
         </div>
       </div>
 
-      {/* ── Résumé ────────────────────────────────────────────────────── */}
-      {(filterPeriode !== "tous" || activeCategory !== "toutes") && (
+      {/* Résumé filtre */}
+      {(filterPeriode !== "tous" ||
+        activeCategory !== "toutes" ||
+        searchTerm) && (
         <div
           style={{
             background: "#eff6ff",
             border: "1px solid #bfdbfe",
-            borderRadius: 8,
-            padding: "8px 13px",
-            marginBottom: 10,
+            borderRadius: 10,
+            padding: "10px 14px",
+            marginBottom: 12,
             display: "flex",
             justifyContent: "space-between",
             flexWrap: "wrap",
-            gap: 4,
+            gap: 8,
           }}
         >
           <span style={{ fontSize: 13, color: "#1d4ed8" }}>
@@ -861,20 +967,50 @@ const Ventes = () => {
             )}
             <strong>{ventesFiltered.length}</strong> vente(s)
           </span>
-          <span style={{ fontSize: 13, color: "#1d4ed8", fontWeight: 700 }}>
-            {fmt(totalFiltre)}
-          </span>
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              flexWrap: "wrap",
+              alignItems: "center",
+            }}
+          >
+            <span style={{ fontSize: 13, color: "#1d4ed8", fontWeight: 700 }}>
+              Total : {fmt(totalFiltre)}
+            </span>
+            <BeneficePill value={beneficeFiltre} size={12} />
+          </div>
         </div>
       )}
 
-      {/* ── Contenu ───────────────────────────────────────────────────── */}
+      {/* Contenu */}
       {ventesFiltered.length === 0 ? (
-        <div className="table-container">
-          <p className="no-data">
+        <div
+          style={{
+            background: "white",
+            borderRadius: 14,
+            border: "1.5px solid #e2e8f0",
+            padding: "48px 24px",
+            textAlign: "center",
+            color: "#94a3b8",
+          }}
+        >
+          <div style={{ fontSize: 36, marginBottom: 12 }}>🛍️</div>
+          <div
+            style={{
+              fontSize: 15,
+              fontWeight: 600,
+              color: "#475569",
+              marginBottom: 6,
+            }}
+          >
+            Aucune vente trouvée
+          </div>
+          <div style={{ fontSize: 13 }}>
             {activeCategory !== "toutes"
               ? `Aucune vente dans "${CATEGORIES_CONFIG.find((c) => c.key === activeCategory)?.label}"`
-              : "Aucune vente trouvée"}
-          </p>
+              : "Essayez de modifier vos filtres"}
+          </div>
         </div>
       ) : isMobile ? (
         <div>
@@ -883,19 +1019,24 @@ const Ventes = () => {
           ))}
         </div>
       ) : (
-        /* ── Tableau desktop ─────────────────────────────────────────── */
-        <div className="table-container">
+        /* Tableau desktop — 9 colonnes au lieu de 14 */
+        <div
+          style={{
+            background: "white",
+            borderRadius: 14,
+            border: "1.5px solid #e2e8f0",
+            overflow: "hidden",
+            boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+          }}
+        >
           <table className="data-table">
             <thead>
-              <tr>
-                <th style={{ width: 32 }}></th>
-                <th>Date</th>
+              <tr style={{ background: "#f8fafc" }}>
+                <th style={{ width: 36 }}></th>
+                <th style={{ width: 82 }}>Date</th>
                 <th>Client</th>
-                <th>Produit(s)</th>
-                <th>Catégorie</th>
-                <th>Destination</th>
-                <th>Vente</th>
-                <th>Frais</th>
+                <th>Produit / Cat. / Dest.</th>
+                <th>Montants</th>
                 <th>Total</th>
                 <th>Livreur</th>
                 <th>Statut</th>
@@ -912,9 +1053,11 @@ const Ventes = () => {
                 return (
                   <Fragment key={vente._id}>
                     <tr style={grouped ? { background: "#f0f9ff" } : {}}>
+                      {/* Expand */}
                       <td style={{ textAlign: "center" }}>
                         {grouped && (
                           <button
+                            type="button"
                             onClick={() => toggleExpand(vente._id)}
                             style={{
                               background: "#dbeafe",
@@ -925,30 +1068,47 @@ const Ventes = () => {
                               cursor: "pointer",
                             }}
                           >
-                            {expanded ? <FaChevronUp /> : <FaChevronDown />}
+                            {expanded ? (
+                              <FaChevronUp size={10} />
+                            ) : (
+                              <FaChevronDown size={10} />
+                            )}
                           </button>
                         )}
                       </td>
-                      <td style={{ whiteSpace: "nowrap" }}>
+
+                      {/* Date */}
+                      <td
+                        style={{
+                          whiteSpace: "nowrap",
+                          fontSize: 12,
+                          color: "#64748b",
+                        }}
+                      >
                         {fmtDate(vente.dateVente)}
                       </td>
+
+                      {/* Client */}
                       <td>
                         <div
                           style={{
                             display: "flex",
                             alignItems: "center",
-                            gap: 7,
+                            gap: 6,
                           }}
                         >
                           <div>
-                            <strong>{vente.nomClient}</strong>
+                            <strong style={{ fontSize: 13 }}>
+                              {vente.nomClient}
+                            </strong>
                             <br />
-                            <small className="text-secondary">
+                            <small style={{ color: "#94a3b8" }}>
                               {vente.telephoneClient}
                             </small>
                           </div>
                           {canAdd && (
                             <button
+                              type="button"
                               onClick={() =>
                                 navigate(`/ventes/${vente._id}/ajouter-produit`)
                               }
@@ -958,13 +1118,13 @@ const Ventes = () => {
                                 color: "white",
                                 border: "none",
                                 borderRadius: "50%",
-                                width: 24,
-                                height: 24,
+                                width: 20,
+                                height: 20,
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
                                 cursor: "pointer",
-                                fontSize: 10,
+                                fontSize: 8,
                               }}
                             >
                               <FaPlus />
@@ -972,76 +1132,122 @@ const Ventes = () => {
                           )}
                         </div>
                       </td>
+
+                      {/* Produit + catégorie + destination fusionnés */}
                       <td>
-                        {grouped ? (
-                          <span
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 5,
-                              color: "#1d4ed8",
-                              fontWeight: 600,
-                              fontSize: 13,
-                            }}
-                          >
-                            <FaBoxOpen /> {vente.produits.length} produits
-                          </span>
-                        ) : (
-                          <>
-                            {vente.nomProduit}
-                            {vente.tailleProduit && (
-                              <small className="text-secondary">
-                                {" "}
-                                · {vente.tailleProduit}
-                              </small>
-                            )}
-                          </>
-                        )}
-                      </td>
-                      <td>
-                        <CategorieBadge categorie={catVente} />
-                      </td>
-                      <td>
-                        <span
+                        <div
                           style={{
-                            fontSize: 12,
-                            padding: "2px 7px",
-                            borderRadius: 10,
-                            background:
-                              vente.destinationClient === "Antsirabe"
-                                ? "#dbeafe"
-                                : "#f0fdf4",
-                            color:
-                              vente.destinationClient === "Antsirabe"
-                                ? "#1d4ed8"
-                                : "#166534",
+                            fontSize: 13,
+                            fontWeight: 500,
+                            marginBottom: 4,
                           }}
                         >
-                          {vente.destinationClient || "Local"}
-                        </span>
+                          {grouped ? (
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                                color: "#1d4ed8",
+                                fontWeight: 600,
+                              }}
+                            >
+                              <FaBoxOpen size={11} /> {vente.produits.length}{" "}
+                              produits
+                            </span>
+                          ) : (
+                            <>
+                              {vente.nomProduit}
+                              {vente.tailleProduit && (
+                                <small style={{ color: "#94a3b8" }}>
+                                  {" "}
+                                  · {vente.tailleProduit}
+                                </small>
+                              )}
+                            </>
+                          )}
+                        </div>
+                        <div
+                          style={{ display: "flex", gap: 4, flexWrap: "wrap" }}
+                        >
+                          <CategorieBadge categorie={catVente} />
+                          <span
+                            style={{
+                              fontSize: 10,
+                              padding: "2px 6px",
+                              borderRadius: 8,
+                              fontWeight: 500,
+                              background:
+                                vente.destinationClient === "Antsirabe"
+                                  ? "#dbeafe"
+                                  : "#f0fdf4",
+                              color:
+                                vente.destinationClient === "Antsirabe"
+                                  ? "#1d4ed8"
+                                  : "#166534",
+                            }}
+                          >
+                            {vente.destinationClient || "Local"}
+                          </span>
+                        </div>
                       </td>
-                      <td>{fmt(vente.prixVente)}</td>
-                      <td>{fmt(vente.fraisLivraison)}</td>
+
+                      {/* Vente + Achat + Bénéfice dans une cellule */}
                       <td>
-                        <strong className="text-success">
+                        <div
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: "#1e293b",
+                          }}
+                        >
+                          {fmt(vente.prixVente)}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: "#92400e",
+                            marginTop: 1,
+                          }}
+                        >
+                          Achat : {fmt(vente.totalAchat || 0)}
+                        </div>
+                        <div style={{ marginTop: 4 }}>
+                          <BeneficePill value={vente.totalBenefice || 0} />
+                        </div>
+                      </td>
+
+                      {/* Total + frais si > 0 */}
+                      <td>
+                        <strong style={{ color: "#059669", fontSize: 13 }}>
                           {fmt(vente.montantTotal)}
                         </strong>
-                      </td>
-                      <td>
-                        {vente.livreur ? (
-                          <>
-                            {vente.livreur.nom}
-                            <br />
-                            <small className="text-secondary">
-                              {vente.livreur.telephone}
-                            </small>
-                          </>
-                        ) : (
-                          "-"
+                        {vente.fraisLivraison > 0 && (
+                          <div
+                            style={{
+                              fontSize: 10,
+                              color: "#94a3b8",
+                              marginTop: 2,
+                            }}
+                          >
+                            +{fmt(vente.fraisLivraison)} livr.
+                          </div>
                         )}
                       </td>
+
+                      {/* Livreur */}
+                      <td style={{ fontSize: 12, color: "#475569" }}>
+                        {vente.livreur ? (
+                          vente.livreur.nom
+                        ) : (
+                          <span style={{ color: "#cbd5e1" }}>—</span>
+                        )}
+                      </td>
+
+                      {/* Statut */}
                       <td>
                         <button
+                          type="button"
                           className={`status-badge ${getStatutClass(vente.statutLivraison)}`}
                           onClick={() =>
                             handleChangeStatut(vente._id, vente.statutLivraison)
@@ -1060,6 +1266,8 @@ const Ventes = () => {
                           {getStatutLabel(vente.statutLivraison)}
                         </button>
                       </td>
+
+                      {/* Actions */}
                       <td>
                         <div className="flex gap-10">
                           <Link
@@ -1070,6 +1278,7 @@ const Ventes = () => {
                           </Link>
                           {vente.statutLivraison !== "annulé" && (
                             <button
+                              type="button"
                               className="btn btn-sm btn-icon btn-danger"
                               onClick={() => handleAnnuler(vente._id)}
                             >
@@ -1077,6 +1286,7 @@ const Ventes = () => {
                             </button>
                           )}
                           <button
+                            type="button"
                             className="btn btn-sm btn-icon btn-danger"
                             onClick={() =>
                               handleDelete(vente._id, vente.nomClient)
@@ -1088,6 +1298,7 @@ const Ventes = () => {
                       </td>
                     </tr>
 
+                    {/* Sous-lignes produits */}
                     {grouped &&
                       expanded &&
                       vente.produits.map((pe, idx) => (
@@ -1099,37 +1310,54 @@ const Ventes = () => {
                           }}
                         >
                           <td></td>
-                          <td
-                            style={{
-                              color: "#94a3b8",
-                              fontSize: 12,
-                              paddingLeft: 20,
-                            }}
-                          >
+                          <td style={{ color: "#94a3b8", fontSize: 11 }}>
                             #{idx + 1}
                           </td>
                           <td></td>
-                          <td style={{ paddingLeft: 14 }}>
-                            <strong>{pe.nomProduit}</strong>
+                          <td style={{ paddingLeft: 12 }}>
+                            <strong style={{ fontSize: 13 }}>
+                              {pe.nomProduit}
+                            </strong>
                             {pe.tailleProduit && (
-                              <small className="text-secondary">
+                              <small style={{ color: "#94a3b8" }}>
                                 {" "}
                                 · {pe.tailleProduit}
                               </small>
                             )}
+                            <div style={{ marginTop: 3 }}>
+                              <CategorieBadge
+                                categorie={pe.categorie || "autres"}
+                              />
+                            </div>
                           </td>
                           <td>
-                            <CategorieBadge
-                              categorie={pe.categorie || "autres"}
-                            />
+                            <div style={{ fontSize: 13, fontWeight: 600 }}>
+                              {fmt(pe.prixVente)}
+                            </div>
+                            <div
+                              style={{
+                                fontSize: 11,
+                                color: "#92400e",
+                                marginTop: 1,
+                              }}
+                            >
+                              Achat : {fmt(pe.prixAchat || 0)}
+                            </div>
+                            <div style={{ marginTop: 4 }}>
+                              <BeneficePill
+                                value={
+                                  pe.benefice ??
+                                  (pe.prixVente || 0) - (pe.prixAchat || 0)
+                                }
+                              />
+                            </div>
                           </td>
-                          <td></td>
-                          <td>{fmt(pe.prixVente)}</td>
-                          <td colSpan={4}></td>
+                          <td colSpan={3}></td>
                           <td>
                             <div className="flex gap-10">
                               {vente.statutLivraison !== "annulé" && (
                                 <button
+                                  type="button"
                                   className="btn btn-sm btn-icon btn-secondary"
                                   onClick={() =>
                                     navigate(
@@ -1143,6 +1371,7 @@ const Ventes = () => {
                               {vente.produits.length > 1 &&
                                 vente.statutLivraison !== "annulé" && (
                                   <button
+                                    type="button"
                                     className="btn btn-sm btn-icon btn-danger"
                                     onClick={() =>
                                       handleSupprimerProduit(
@@ -1166,6 +1395,16 @@ const Ventes = () => {
           </table>
         </div>
       )}
+
+      <style>{`
+        input:focus, select:focus {
+          border-color: #2563eb !important;
+          box-shadow: 0 0 0 3px rgba(37,99,235,0.12) !important;
+          outline: none !important;
+        }
+        .data-table th { font-size: 11px; color: #64748b; letter-spacing: 0.05em; padding: 12px 14px; }
+        .data-table td { vertical-align: middle; padding: 12px 14px; }
+      `}</style>
     </div>
   );
 };

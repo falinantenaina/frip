@@ -16,6 +16,7 @@ import Rapports from "./pages/Rapports";
 import VenteForm from "./pages/VenteForm";
 import Ventes from "./pages/Ventes";
 import AjouterProduitPage from "./pages/ventes/AjouterProduitPage";
+import EditVenteInfoPage from "./pages/ventes/EditVenteInfoPage";
 import ModifierProduitPage from "./pages/ventes/ModifierProduitPage";
 import useAuthStore from "./stores/authStore";
 
@@ -67,6 +68,8 @@ function App() {
             </PrivateRoute>
           }
         />
+
+        {/* Balles */}
         <Route
           path="/balles"
           element={
@@ -99,6 +102,8 @@ function App() {
             </AdminRoute>
           }
         />
+
+        {/* Ventes */}
         <Route
           path="/ventes"
           element={
@@ -115,24 +120,36 @@ function App() {
             </AdminRoute>
           }
         />
-        <Route
-          path="/ventes/:id/ajouter-produit"
-          element={<AjouterProduitPage />}
-        />
 
-        <Route
-          path="/ventes/:venteId/produits/:produitEntryId/edit"
-          element={<ModifierProduitPage />}
-        />
-
+        {/* ── Modification séparée : infos générales ───────────────────── */}
         <Route
           path="/ventes/:id/edit"
           element={
             <AdminRoute>
-              <VenteForm />
+              <EditVenteInfoPage />
             </AdminRoute>
           }
         />
+
+        {/* ── Gestion des produits d'une vente ─────────────────────────── */}
+        <Route
+          path="/ventes/:id/ajouter-produit"
+          element={
+            <AdminRoute>
+              <AjouterProduitPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/ventes/:venteId/produits/:produitEntryId/edit"
+          element={
+            <AdminRoute>
+              <ModifierProduitPage />
+            </AdminRoute>
+          }
+        />
+
+        {/* Dépenses */}
         <Route
           path="/depenses"
           element={
@@ -149,6 +166,8 @@ function App() {
             </AdminRoute>
           }
         />
+
+        {/* Livreurs */}
         <Route
           path="/livreurs"
           element={
@@ -165,6 +184,8 @@ function App() {
             </AdminRoute>
           }
         />
+
+        {/* Autres */}
         <Route
           path="/produits/new"
           element={
@@ -189,6 +210,7 @@ function App() {
             </AdminRoute>
           }
         />
+
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </div>
