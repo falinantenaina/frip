@@ -16,7 +16,7 @@ import Rapports from "./pages/Rapports";
 import VenteForm from "./pages/VenteForm";
 import Ventes from "./pages/Ventes";
 import AjouterProduitPage from "./pages/ventes/AjouterProduitPage";
-import EditVenteInfoPage from "./pages/ventes/EditVenteInfoPage";
+import EditVenteInfoPage from "./pages/ventes/EditventeInfopage";
 import ModifierProduitPage from "./pages/ventes/ModifierProduitPage";
 import useAuthStore from "./stores/authStore";
 
