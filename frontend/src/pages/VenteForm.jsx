@@ -44,7 +44,7 @@ const VenteForm = () => {
     destinationClient: "Antsirabe",
     nomProduit: "",
     tailleProduit: "",
-    prixVente: "",
+    prixVente: "", // utilisé pour saisie du 1er produit (création)
     prixAchat: "",
     categorie: "chaussures",
     livreur: "",
@@ -80,12 +80,13 @@ const VenteForm = () => {
         destinationClient: vente.destinationClient || "Local",
         nomProduit: vente.nomProduit,
         tailleProduit: vente.tailleProduit || "",
-        prixVente: vente.prixVente.toString(),
+        // En édition, prixVente = somme calculée (lecture seule, pas modifiable ici)
+        prixVente: vente.prixVente?.toString() || "0",
         prixAchat: "",
         categorie: vente.categorie || "autres",
         livreur: vente.livreur?._id || "",
-        fraisLivraison: vente.fraisLivraison.toString(),
-        lieuLivraison: vente.lieuLivraison,
+        fraisLivraison: vente.fraisLivraison?.toString() || "0",
+        lieuLivraison: vente.lieuLivraison || "",
         statutLivraison: vente.statutLivraison,
         commentaires: vente.commentaires || "",
         expeditionId: "",
@@ -124,7 +125,7 @@ const VenteForm = () => {
       destinationClient: formData.destinationClient,
       nomProduit: formData.nomProduit,
       tailleProduit: formData.tailleProduit,
-      prixVente: parseFloat(formData.prixVente),
+      prixVente: parseFloat(formData.prixVente) || 0,
       fraisLivraison: parseFloat(formData.fraisLivraison) || 0,
       lieuLivraison: formData.lieuLivraison,
       statutLivraison: formData.statutLivraison,
@@ -132,9 +133,12 @@ const VenteForm = () => {
       typeVente,
       categorie: formData.categorie,
     };
+
+    // Prix d'achat : seulement pour vente libre, pour calculer le bénéfice du produit
     if (typeVente === "libre" && formData.prixAchat) {
       data.prixAchatProduit = parseFloat(formData.prixAchat) || 0;
     }
+
     if (typeVente === "balle") {
       data.balle = formData.balle;
       if (venteMode === "avec_produit" && formData.produit)
@@ -143,6 +147,8 @@ const VenteForm = () => {
     if (formData.livreur) data.livreur = formData.livreur;
 
     if (isEdit) {
+      // En édition, on n'envoie pas prixVente (calculé côté serveur depuis les sous-produits)
+      delete data.prixVente;
       const r = await updateVente(id, data);
       if (r.success) {
         toast.success("Vente modifiée");
@@ -180,13 +186,14 @@ const VenteForm = () => {
     navigate("/ventes");
   };
 
-  const totalEstime =
-    (parseFloat(formData.prixVente) || 0) +
-    (parseFloat(formData.fraisLivraison) || 0);
+  // Calculs pour le résumé (création uniquement)
+  const prixVenteNum = parseFloat(formData.prixVente) || 0;
+  const prixAchatNum = parseFloat(formData.prixAchat) || 0;
+  const fraisNum = parseFloat(formData.fraisLivraison) || 0;
+  const totalEstime = prixVenteNum + fraisNum;
   const beneficeEstime =
     typeVente === "libre" && formData.prixAchat
-      ? (parseFloat(formData.prixVente) || 0) -
-        (parseFloat(formData.prixAchat) || 0)
+      ? prixVenteNum - prixAchatNum
       : null;
 
   const expeditionsFiltrees = expeditionsEnPrepa.filter(
@@ -196,7 +203,6 @@ const VenteForm = () => {
         exp.destination === "Antsirabe"),
   );
 
-  // Couleur de la catégorie sélectionnée
   const catColor = {
     chaussures: { bg: "#dbeafe", color: "#1d4ed8", border: "#93c5fd" },
     robes: { bg: "#fce7f3", color: "#be185d", border: "#f9a8d4" },
@@ -448,7 +454,7 @@ const VenteForm = () => {
                         marginLeft: 6,
                       }}
                     >
-                      optionnel
+                      pour calculer le bénéfice
                     </small>
                   </label>
                   <input
@@ -462,6 +468,7 @@ const VenteForm = () => {
                   />
                 </div>
               </div>
+              {/* Bénéfice estimé en temps réel */}
               {beneficeEstime !== null && (
                 <div
                   style={{
@@ -472,10 +479,13 @@ const VenteForm = () => {
                     marginBottom: 12,
                     fontSize: 13,
                     color: beneficeEstime >= 0 ? "#166534" : "#991b1b",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
                   }}
                 >
-                  Bénéfice estimé :{" "}
-                  <strong>
+                  <span>Bénéfice estimé</span>
+                  <strong style={{ fontSize: 15 }}>
                     {new Intl.NumberFormat("fr-FR").format(beneficeEstime)} AR
                   </strong>
                 </div>
@@ -672,7 +682,7 @@ const VenteForm = () => {
             />
           </div>
 
-          {/* Résumé */}
+          {/* ── RÉSUMÉ ── */}
           <div
             style={{
               background: "var(--light-color)",
@@ -681,13 +691,16 @@ const VenteForm = () => {
               marginBottom: 20,
             }}
           >
+            {/* Catégorie */}
             <div className="flex-between mb-10">
-              <span>Catégorie</span>
+              <span style={{ color: "var(--secondary-color)", fontSize: 13 }}>
+                Catégorie
+              </span>
               <span
                 style={{
                   padding: "3px 12px",
                   borderRadius: 20,
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: 600,
                   background: selectedCat.bg,
                   color: selectedCat.color,
@@ -697,35 +710,119 @@ const VenteForm = () => {
                 {CATEGORIES.find((c) => c.value === formData.categorie)?.label}
               </span>
             </div>
-            <div className="flex-between mb-10">
-              <span>Prix de vente</span>
-              <strong>{formData.prixVente || 0} AR</strong>
-            </div>
-            {typeVente === "libre" && formData.prixAchat && (
-              <div className="flex-between mb-10">
-                <span>Prix d'achat</span>
-                <strong className="text-danger">
-                  − {formData.prixAchat} AR
-                </strong>
-              </div>
+
+            {/* Affichage création */}
+            {!isEdit && (
+              <>
+                <div className="flex-between mb-10">
+                  <span
+                    style={{ color: "var(--secondary-color)", fontSize: 13 }}
+                  >
+                    Prix de vente
+                  </span>
+                  <strong>
+                    {new Intl.NumberFormat("fr-FR").format(prixVenteNum)} AR
+                  </strong>
+                </div>
+                {typeVente === "libre" && formData.prixAchat && (
+                  <div className="flex-between mb-10">
+                    <span
+                      style={{ color: "var(--secondary-color)", fontSize: 13 }}
+                    >
+                      − Prix d'achat
+                    </span>
+                    <strong className="text-danger">
+                      {new Intl.NumberFormat("fr-FR").format(prixAchatNum)} AR
+                    </strong>
+                  </div>
+                )}
+                {fraisNum > 0 && (
+                  <div className="flex-between mb-10">
+                    <span
+                      style={{ color: "var(--secondary-color)", fontSize: 13 }}
+                    >
+                      + Frais livraison
+                    </span>
+                    <strong>
+                      {new Intl.NumberFormat("fr-FR").format(fraisNum)} AR
+                    </strong>
+                  </div>
+                )}
+                <div
+                  className="flex-between"
+                  style={{
+                    borderTop: "2px solid var(--border-color)",
+                    paddingTop: 10,
+                    marginTop: 4,
+                  }}
+                >
+                  <strong>Total client</strong>
+                  <strong
+                    style={{ fontSize: 20, color: "var(--success-color)" }}
+                  >
+                    {new Intl.NumberFormat("fr-FR").format(totalEstime)} AR
+                  </strong>
+                </div>
+                {beneficeEstime !== null && (
+                  <div
+                    className="flex-between"
+                    style={{
+                      marginTop: 8,
+                      paddingTop: 8,
+                      borderTop: "1px dashed var(--border-color)",
+                    }}
+                  >
+                    <span
+                      style={{ fontSize: 13, color: "var(--secondary-color)" }}
+                    >
+                      Bénéfice produit
+                    </span>
+                    <strong
+                      style={{
+                        fontSize: 14,
+                        color:
+                          beneficeEstime >= 0
+                            ? "var(--success-color)"
+                            : "var(--danger-color)",
+                      }}
+                    >
+                      {new Intl.NumberFormat("fr-FR").format(beneficeEstime)} AR
+                    </strong>
+                  </div>
+                )}
+              </>
             )}
-            <div className="flex-between mb-10">
-              <span>Frais de livraison</span>
-              <strong>{formData.fraisLivraison || 0} AR</strong>
-            </div>
-            <div
-              className="flex-between"
-              style={{
-                borderTop: "2px solid var(--border-color)",
-                paddingTop: 10,
-                marginTop: 4,
-              }}
-            >
-              <strong>Total client</strong>
-              <strong style={{ fontSize: 20, color: "var(--success-color)" }}>
-                {totalEstime} AR
-              </strong>
-            </div>
+
+            {/* Affichage édition : résumé lecture seule */}
+            {isEdit && (
+              <>
+                <div className="flex-between mb-10">
+                  <span
+                    style={{ color: "var(--secondary-color)", fontSize: 13 }}
+                  >
+                    Total produits (calculé)
+                  </span>
+                  <strong style={{ color: "var(--primary-color)" }}>
+                    {new Intl.NumberFormat("fr-FR").format(
+                      parseFloat(formData.prixVente) || 0,
+                    )}{" "}
+                    AR
+                  </strong>
+                </div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "var(--secondary-color)",
+                    marginBottom: 8,
+                    fontStyle: "italic",
+                  }}
+                >
+                  ℹ️ Le total est recalculé automatiquement depuis les
+                  sous-produits. Pour modifier un prix, utilisez "Modifier
+                  produit" depuis la liste des ventes.
+                </div>
+              </>
+            )}
           </div>
 
           <div className="flex-between">

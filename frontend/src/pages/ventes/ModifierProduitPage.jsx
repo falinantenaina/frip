@@ -6,8 +6,20 @@ import useBalleStore from "../../stores/balleStore";
 import useVenteStore from "../../stores/venteStore";
 import api from "../../utils/api";
 
+const CATEGORIES = [
+  { value: "chaussures", label: "👟 Chaussures" },
+  { value: "robes", label: "👗 Robes / Vêtements" },
+  { value: "autres", label: "📦 Autres" },
+];
+
+const catColor = {
+  chaussures: { bg: "#dbeafe", color: "#1d4ed8", border: "#93c5fd" },
+  robes: { bg: "#fce7f3", color: "#be185d", border: "#f9a8d4" },
+  autres: { bg: "#f3f4f6", color: "#374151", border: "#d1d5db" },
+};
+
 /**
- * Route attendue : /ventes/:venteId/produits/:produitEntryId/edit
+ * Route : /ventes/:venteId/produits/:produitEntryId/edit
  */
 const ModifierProduitPage = () => {
   const { venteId, produitEntryId } = useParams();
@@ -16,13 +28,11 @@ const ModifierProduitPage = () => {
   const { balles, fetchBalles } = useBalleStore();
   const [produitsDisponibles, setProduitsDisponibles] = useState([]);
 
-  // Récupère la vente et l'entrée produit correspondantes
   const vente = ventes.find((v) => v._id === venteId);
   const produitEntry = vente?.produits?.find((p) => p._id === produitEntryId);
 
   const [formData, setFormData] = useState(null);
 
-  // Initialise le formulaire une fois la vente chargée
   useEffect(() => {
     if (!vente) fetchVentes();
     fetchBalles();
@@ -37,7 +47,9 @@ const ModifierProduitPage = () => {
         nomProduit: produitEntry.nomProduit,
         tailleProduit: produitEntry.tailleProduit || "",
         prixVente: produitEntry.prixVente.toString(),
-        prixAchat: produitEntry.prixAchat.toString(),
+        prixAchat: (produitEntry.prixAchat || 0).toString(),
+        // FIX: charger la catégorie existante du sous-produit
+        categorie: produitEntry.categorie || "autres",
       });
       if (balleId)
         loadProduits(
@@ -51,7 +63,6 @@ const ModifierProduitPage = () => {
     try {
       const res = await api.get(`/produits/balle/${balleId}/disponibles`);
       const liste = res.data.data;
-      // Inclure le produit actuel s'il n'est pas dans la liste disponible
       if (produitActuelId) {
         const dejaDedans = liste.find((p) => p._id === produitActuelId);
         if (!dejaDedans) {
@@ -94,6 +105,8 @@ const ModifierProduitPage = () => {
       tailleProduit: formData.tailleProduit,
       prixVente: parseFloat(formData.prixVente),
       prixAchat: parseFloat(formData.prixAchat),
+      // FIX: envoyer la catégorie
+      categorie: formData.categorie,
     };
     if (formData.produit) payload.produit = formData.produit;
 
@@ -106,7 +119,6 @@ const ModifierProduitPage = () => {
     }
   };
 
-  // Écran de chargement si la vente n'est pas encore disponible
   if (!vente || !produitEntry || !formData) {
     return (
       <div className="main-content">
@@ -117,9 +129,10 @@ const ModifierProduitPage = () => {
     );
   }
 
+  const selectedCat = catColor[formData.categorie] || catColor.autres;
+
   return (
     <div className="main-content">
-      {/* En-tête */}
       <div className="page-header">
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <button
@@ -174,9 +187,15 @@ const ModifierProduitPage = () => {
             {new Intl.NumberFormat("fr-FR").format(produitEntry.prixVente)} AR
           </strong>
         </span>
+        <span>
+          Catégorie actuelle :{" "}
+          <strong>
+            {CATEGORIES.find((c) => c.value === produitEntry.categorie)
+              ?.label || "Autres"}
+          </strong>
+        </span>
       </div>
 
-      {/* Formulaire */}
       <div className="card" style={{ maxWidth: 600 }}>
         <div className="card-header">
           <h2
@@ -189,6 +208,47 @@ const ModifierProduitPage = () => {
         </div>
 
         <form onSubmit={handleSubmit}>
+          {/* FIX: Sélecteur de catégorie */}
+          <div className="form-group">
+            <label className="form-label" style={{ fontWeight: 600 }}>
+              Catégorie du produit *
+            </label>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {CATEGORIES.map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() =>
+                    setFormData((p) => ({ ...p, categorie: value }))
+                  }
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                    fontSize: 13,
+                    border: `2px solid ${
+                      formData.categorie === value
+                        ? catColor[value].border
+                        : "var(--border-color)"
+                    }`,
+                    background:
+                      formData.categorie === value
+                        ? catColor[value].bg
+                        : "white",
+                    color:
+                      formData.categorie === value
+                        ? catColor[value].color
+                        : "var(--secondary-color)",
+                    fontWeight: formData.categorie === value ? 600 : 400,
+                    transition: "all 0.2s",
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Balle */}
           <div className="form-group">
             <label className="form-label">Balle</label>
@@ -256,29 +316,51 @@ const ModifierProduitPage = () => {
           </div>
 
           {/* Prix */}
-          <div className="form-group">
-            <label className="form-label">Prix de vente (AR) *</label>
-            <input
-              type="number"
-              name="prixVente"
-              className="form-input"
-              value={formData.prixVente}
-              onChange={handleChange}
-              min="0"
-              required
-            />
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Prix de vente (AR) *</label>
+              <input
+                type="number"
+                name="prixVente"
+                className="form-input"
+                value={formData.prixVente}
+                onChange={handleChange}
+                min="0"
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Prix d'achat (AR)</label>
+              <input
+                type="number"
+                name="prixAchat"
+                className="form-input"
+                value={formData.prixAchat}
+                onChange={handleChange}
+                min="0"
+              />
+            </div>
           </div>
-          <div className="form-group">
-            <label className="form-label">Prix d'achat (AR) *</label>
-            <input
-              type="number"
-              name="prixAchat"
-              className="form-input"
-              value={formData.prixAchat}
-              onChange={handleChange}
-              min="0"
-              required
-            />
+
+          {/* Indicateur catégorie sélectionnée */}
+          <div
+            style={{
+              background: selectedCat.bg,
+              border: `1px solid ${selectedCat.border}`,
+              borderRadius: 8,
+              padding: "8px 14px",
+              fontSize: 13,
+              color: selectedCat.color,
+              marginBottom: 16,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <span>Catégorie sélectionnée :</span>
+            <strong>
+              {CATEGORIES.find((c) => c.value === formData.categorie)?.label}
+            </strong>
           </div>
 
           <div

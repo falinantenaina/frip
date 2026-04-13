@@ -7,6 +7,8 @@ const produitVenteSchema = new mongoose.Schema(
     tailleProduit: { type: String },
     prixVente: { type: Number, required: true, min: 0 },
     prixAchat: { type: Number, default: 0, min: 0 },
+    // Bénéfice par produit = prixVente - prixAchat (calculé automatiquement)
+    benefice: { type: Number, default: 0 },
     categorie: {
       type: String,
       enum: ["chaussures", "robes", "autres"],
@@ -30,10 +32,12 @@ const venteSchema = new mongoose.Schema(
     },
     produits: [produitVenteSchema],
     produit: { type: mongoose.Schema.Types.ObjectId, ref: "Produit" },
+
+    // Champs de compatibilité / affichage pour vente simple
     nomProduit: { type: String, required: true },
     tailleProduit: { type: String },
 
-    // Catégorie principale de la vente (déduite des produits ou saisie directement)
+    // Catégorie principale (déduite des sous-produits via pre-save)
     categorie: {
       type: String,
       enum: ["chaussures", "robes", "autres"],
@@ -55,11 +59,16 @@ const venteSchema = new mongoose.Schema(
       trim: true,
       default: "Local",
     },
-    prixVente: {
-      type: Number,
-      required: [true, "Le prix de vente est requis"],
-      min: 0,
-    },
+
+    // ─── Plus utilisé directement : calculé automatiquement ───────────────
+    // prixVente est maintenant = somme(produits.prixVente), géré par pre-save
+    // On le garde pour compatibilité descendante (agrégations existantes)
+    prixVente: { type: Number, default: 0, min: 0 },
+
+    // Total bénéfice de la vente = somme(produits.benefice)
+    totalAchat: { type: Number, default: 0 },
+    totalBenefice: { type: Number, default: 0 },
+
     livreur: { type: mongoose.Schema.Types.ObjectId, ref: "Livreur" },
     fraisLivraison: { type: Number, default: 0, min: 0 },
     lieuLivraison: { type: String, trim: true },
@@ -69,7 +78,8 @@ const venteSchema = new mongoose.Schema(
       default: "en_attente",
     },
     dateLivraison: { type: Date },
-    montantTotal: { type: Number },
+    // montantTotal = prixVente (total produits) + fraisLivraison
+    montantTotal: { type: Number, default: 0 },
     commentaires: { type: String, trim: true },
     raisonAnnulation: { type: String, trim: true },
     dateVente: { type: Date, default: Date.now },
@@ -82,26 +92,56 @@ const venteSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+// ── Hook pre-save : recalcul complet ──────────────────────────────────────
 venteSchema.pre("save", function () {
   if (this.produits && this.produits.length > 0) {
-    this.prixVente = this.produits.reduce((sum, p) => sum + p.prixVente, 0);
-    // Déduire la catégorie principale : si tous les produits ont la même catégorie, on l'utilise
+    // 1. Calculer le bénéfice de chaque sous-produit
+    this.produits.forEach((p) => {
+      p.benefice = (p.prixVente || 0) - (p.prixAchat || 0);
+    });
+
+    // 2. prixVente total = somme des prixVente des sous-produits
+    this.prixVente = this.produits.reduce(
+      (sum, p) => sum + (p.prixVente || 0),
+      0,
+    );
+
+    // 3. totalBenefice = somme des bénéfices des sous-produits
+    this.totalBenefice = this.produits.reduce(
+      (sum, p) => sum + (p.benefice || 0),
+      0,
+    );
+
+    this.totalAchat = this.produits.reduce(
+      (sum, p) => sum + (p.prixAchat || 0),
+    );
+
+    // 4. Catégorie principale : si tous identiques → cette catégorie, sinon "autres"
     const cats = [
       ...new Set(this.produits.map((p) => p.categorie || "autres")),
     ];
     this.categorie = cats.length === 1 ? cats[0] : "autres";
+  } else {
+    // Pas de sous-produits : pas de bénéfice calculable automatiquement
+    this.totalBenefice = 0;
   }
-  this.montantTotal = this.prixVente + (this.fraisLivraison || 0);
+
+  // 5. montantTotal = prixVente + fraisLivraison
+  this.montantTotal = (this.prixVente || 0) + (this.fraisLivraison || 0);
 });
 
+// ── Hook pre findOneAndUpdate ─────────────────────────────────────────────
+// Uniquement pour les mises à jour directes (fraisLivraison, etc.)
 venteSchema.pre(["findOneAndUpdate", "updateOne", "updateMany"], function () {
   const update = this.getUpdate();
-  if (update.prixVente !== undefined || update.fraisLivraison !== undefined) {
-    const prixVente = update.prixVente ?? this._conditions.prixVente;
-    const fraisLivraison =
-      update.fraisLivraison ?? this._conditions.fraisLivraison ?? 0;
-    update.montantTotal = prixVente + fraisLivraison;
-    this.setUpdate(update);
+  if (update.fraisLivraison !== undefined || update.prixVente !== undefined) {
+    // On ne peut pas recalculer les sous-produits ici, on met juste à jour montantTotal
+    const prixVente = update.prixVente;
+    const fraisLivraison = update.fraisLivraison;
+    if (prixVente !== undefined && fraisLivraison !== undefined) {
+      update.montantTotal = prixVente + fraisLivraison;
+      this.setUpdate(update);
+    }
   }
 });
 

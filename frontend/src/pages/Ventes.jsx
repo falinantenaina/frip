@@ -22,6 +22,99 @@ import { Link, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import useAppStore from "../stores/appStore";
 
+const CATEGORIES_CONFIG = [
+  {
+    key: "toutes",
+    label: "Toutes",
+    icon: "🛍️",
+    color: "#2563eb",
+    lightBg: "#eff6ff",
+    border: "#bfdbfe",
+    text: "#1d4ed8",
+  },
+  {
+    key: "chaussures",
+    label: "Chaussures",
+    icon: "👟",
+    color: "#059669",
+    lightBg: "#ecfdf5",
+    border: "#6ee7b7",
+    text: "#065f46",
+  },
+  {
+    key: "robes",
+    label: "Robes & Vêtements",
+    icon: "👗",
+    color: "#be185d",
+    lightBg: "#fdf2f8",
+    border: "#f9a8d4",
+    text: "#9d174d",
+  },
+  {
+    key: "autres",
+    label: "Autres",
+    icon: "📦",
+    color: "#7c3aed",
+    lightBg: "#f5f3ff",
+    border: "#c4b5fd",
+    text: "#5b21b6",
+  },
+];
+
+const fmt = (n) => new Intl.NumberFormat("fr-FR").format(n) + " AR";
+const fmtDate = (d) => format(new Date(d), "dd/MM/yyyy", { locale: fr });
+
+const getStatutClass = (s) =>
+  ({
+    en_attente: "en_attente",
+    en_cours: "en_cours",
+    livré: "livre",
+    annulé: "annule",
+  })[s] || "en_attente";
+const getStatutLabel = (s) =>
+  ({
+    en_attente: "En attente",
+    en_cours: "En cours",
+    livré: "Livré",
+    annulé: "Annulé",
+  })[s] || s;
+const isGroupee = (v) => v.produits && v.produits.length > 1;
+
+function getCategorieVente(vente) {
+  if (vente.produits && vente.produits.length > 0) {
+    const cats = [
+      ...new Set(vente.produits.map((p) => p.categorie || "autres")),
+    ];
+    return cats.length === 1 ? cats[0] : "autres";
+  }
+  return vente.categorie || "autres";
+}
+
+const CategorieBadge = ({ categorie }) => {
+  const cfg =
+    CATEGORIES_CONFIG.find((c) => c.key === categorie) || CATEGORIES_CONFIG[3];
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 3,
+        padding: "2px 7px",
+        borderRadius: 10,
+        fontSize: 11,
+        fontWeight: 600,
+        background: cfg.lightBg,
+        color: cfg.text,
+        border: `1px solid ${cfg.border}`,
+        whiteSpace: "nowrap",
+        flexShrink: 0,
+      }}
+    >
+      {cfg.icon} {cfg.label}
+    </span>
+  );
+};
+
 const Ventes = () => {
   const {
     ventes,
@@ -33,12 +126,16 @@ const Ventes = () => {
     supprimerProduit,
   } = useAppStore();
   const navigate = useNavigate();
+
   const [filterStatut, setFilterStatut] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterPeriode, setFilterPeriode] = useState("tous");
-  const [filterDateSpecifique, setFilterDateSpecifique] = useState("");
+  const [filterDateSpec, setFilterDateSpec] = useState("");
   const [expandedVentes, setExpandedVentes] = useState(new Set());
+  const [activeCategory, setActiveCategory] = useState("toutes");
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
+
+  console.log(ventes);
 
   useEffect(() => {
     fetchVentes();
@@ -46,10 +143,10 @@ const Ventes = () => {
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 768px)");
-    const handler = (e) => setIsMobile(e.matches);
-    mq.addEventListener("change", handler);
-    setIsMobile(mq.matches); // sync au montage
-    return () => mq.removeEventListener("change", handler);
+    const h = (e) => setIsMobile(e.matches);
+    mq.addEventListener("change", h);
+    setIsMobile(mq.matches);
+    return () => mq.removeEventListener("change", h);
   }, []);
 
   useEffect(() => {
@@ -86,87 +183,83 @@ const Ventes = () => {
       en_cours: "livré",
       livré: "en_attente",
     };
-    const nextStatut = map[currentStatut];
-    if (!nextStatut) return;
-    const r = await updateVente(id, { statutLivraison: nextStatut });
+    const next = map[currentStatut];
+    if (!next) return;
+    const r = await updateVente(id, { statutLivraison: next });
     r.success
-      ? toast.success(`Statut → "${getStatutLabel(nextStatut)}"`)
+      ? toast.success(`Statut → "${getStatutLabel(next)}"`)
       : toast.error(r.message || "Erreur");
   };
 
-  const handleSupprimerProduit = async (
-    venteId,
-    produitEntryId,
-    nomProduit,
-  ) => {
-    if (!window.confirm(`Retirer "${nomProduit}" ?`)) return;
-    const r = await supprimerProduit(venteId, produitEntryId);
+  const handleSupprimerProduit = async (venteId, peId, nom) => {
+    if (!window.confirm(`Retirer "${nom}" ?`)) return;
+    const r = await supprimerProduit(venteId, peId);
     r.success
       ? toast.success("Produit retiré")
       : toast.error(r.message || "Erreur");
   };
 
-  const fmt = (n) => new Intl.NumberFormat("fr-FR").format(n) + " AR";
-  const fmtDate = (d) => format(new Date(d), "dd/MM/yyyy", { locale: fr });
-  const getStatutClass = (s) =>
-    ({
-      en_attente: "en_attente",
-      en_cours: "en_cours",
-      livré: "livre",
-      annulé: "annule",
-    })[s] || "en_attente";
-  const getStatutLabel = (s) =>
-    ({
-      en_attente: "En attente",
-      en_cours: "En cours",
-      livré: "Livré",
-      annulé: "Annulé",
-    })[s] || s;
-  const isGroupee = (v) => v.produits && v.produits.length > 1;
-
-  const filteredVentes = ventes.filter((v) => {
+  /* ── Filtrage ─────────────────────────────────────────────────────────── */
+  const ventesFiltered = ventes.filter((v) => {
+    if (filterStatut && v.statutLivraison !== filterStatut) return false;
     if (searchTerm) {
       const s = searchTerm.toLowerCase();
-      if (
-        !v.nomClient.toLowerCase().includes(s) &&
-        !v.telephoneClient.includes(s) &&
-        !v.nomProduit?.toLowerCase().includes(s) &&
-        !(v.produits || []).some((p) => p.nomProduit?.toLowerCase().includes(s))
-      )
-        return false;
+      const hit =
+        v.nomClient.toLowerCase().includes(s) ||
+        v.telephoneClient.includes(s) ||
+        v.nomProduit?.toLowerCase().includes(s) ||
+        (v.produits || []).some((p) => p.nomProduit?.toLowerCase().includes(s));
+      if (!hit) return false;
     }
     const dv = new Date(v.dateVente);
-    if (filterPeriode === "jour") return isToday(dv);
-    if (filterPeriode === "semaine") return isThisWeek(dv, { weekStartsOn: 1 });
-    if (filterPeriode === "mois") return isThisMonth(dv);
-    if (filterPeriode === "date" && filterDateSpecifique) {
-      const debut = startOfDay(parseISO(filterDateSpecifique));
-      const fin = endOfDay(parseISO(filterDateSpecifique));
-      return dv >= debut && dv <= fin;
+    if (filterPeriode === "jour" && !isToday(dv)) return false;
+    if (filterPeriode === "semaine" && !isThisWeek(dv, { weekStartsOn: 1 }))
+      return false;
+    if (filterPeriode === "mois" && !isThisMonth(dv)) return false;
+    if (filterPeriode === "date" && filterDateSpec) {
+      const debut = startOfDay(parseISO(filterDateSpec));
+      const fin = endOfDay(parseISO(filterDateSpec));
+      if (dv < debut || dv > fin) return false;
     }
+    if (activeCategory !== "toutes" && getCategorieVente(v) !== activeCategory)
+      return false;
     return true;
   });
 
-  const totalFiltre = filteredVentes.reduce(
+  /* compteurs onglets */
+  const counts = {};
+  const totals = {};
+  CATEGORIES_CONFIG.forEach(({ key }) => {
+    const list =
+      key === "toutes"
+        ? ventes
+        : ventes.filter((v) => getCategorieVente(v) === key);
+    counts[key] = list.length;
+    totals[key] = list
+      .filter((v) => v.statutLivraison !== "annulé")
+      .reduce((s, v) => s + (v.prixVente || 0), 0);
+  });
+
+  const totalFiltre = ventesFiltered.reduce(
     (acc, v) => acc + (v.montantTotal || 0),
     0,
   );
 
-  const PeriodeBtn = ({ value, label }) => (
+  const PBtn = ({ value, label }) => (
     <button
       onClick={() => {
         setFilterPeriode(value);
-        setFilterDateSpecifique("");
+        setFilterDateSpec("");
       }}
       style={{
-        padding: isMobile ? "6px 10px" : "7px 14px",
+        padding: "6px 10px",
         borderRadius: 6,
+        cursor: "pointer",
+        fontSize: 12,
         border:
           filterPeriode === value ? "none" : "1px solid var(--border-color)",
         background: filterPeriode === value ? "var(--primary-color)" : "white",
         color: filterPeriode === value ? "white" : "var(--secondary-color)",
-        cursor: "pointer",
-        fontSize: isMobile ? 12 : 13,
         fontWeight: filterPeriode === value ? 600 : 400,
         whiteSpace: "nowrap",
       }}
@@ -184,11 +277,12 @@ const Ventes = () => {
       </div>
     );
 
-  /* ───────────── CARTE MOBILE ───────────── */
+  /* ── Carte mobile ─────────────────────────────────────────────────────── */
   const VenteCard = ({ vente }) => {
     const grouped = isGroupee(vente);
     const expanded = expandedVentes.has(vente._id);
     const canAdd = vente.statutLivraison !== "annulé";
+    const catVente = getCategorieVente(vente);
 
     return (
       <div
@@ -196,33 +290,40 @@ const Ventes = () => {
           background: "white",
           borderRadius: 12,
           boxShadow: "var(--shadow)",
-          marginBottom: 12,
+          marginBottom: 10,
           overflow: "hidden",
-          borderLeft: grouped
-            ? "4px solid #2563eb"
-            : "4px solid var(--border-color)",
+          borderLeft: `4px solid ${grouped ? "#2563eb" : "var(--border-color)"}`,
         }}
       >
-        <div style={{ padding: "14px 16px" }}>
+        <div style={{ padding: "11px 13px" }}>
           {/* Ligne 1 : client + statut */}
           <div
             style={{
               display: "flex",
               justifyContent: "space-between",
               alignItems: "flex-start",
-              marginBottom: 8,
+              gap: 8,
+              marginBottom: 5,
             }}
           >
-            <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
               <div
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 8,
+                  gap: 5,
                   flexWrap: "wrap",
                 }}
               >
-                <strong style={{ fontSize: 15, color: "var(--dark-color)" }}>
+                <strong
+                  style={{
+                    fontSize: 14,
+                    color: "var(--dark-color)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
                   {vente.nomClient}
                 </strong>
                 {canAdd && (
@@ -230,20 +331,19 @@ const Ventes = () => {
                     onClick={() =>
                       navigate(`/ventes/${vente._id}/ajouter-produit`)
                     }
-                    title="Ajouter un produit"
                     style={{
                       background: "#2563eb",
                       color: "white",
                       border: "none",
                       borderRadius: "50%",
-                      width: 22,
-                      height: 22,
+                      width: 19,
+                      height: 19,
                       flexShrink: 0,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       cursor: "pointer",
-                      fontSize: 10,
+                      fontSize: 8,
                     }}
                   >
                     <FaPlus />
@@ -252,9 +352,9 @@ const Ventes = () => {
               </div>
               <div
                 style={{
-                  fontSize: 12,
+                  fontSize: 11,
                   color: "var(--secondary-color)",
-                  marginTop: 2,
+                  marginTop: 1,
                 }}
               >
                 {vente.telephoneClient} · {fmtDate(vente.dateVente)}
@@ -272,8 +372,8 @@ const Ventes = () => {
                     : "pointer",
                 border: "none",
                 flexShrink: 0,
-                marginLeft: 8,
                 opacity: vente.statutLivraison === "annulé" ? 0.6 : 1,
+                fontSize: 11,
               }}
               disabled={vente.statutLivraison === "annulé"}
             >
@@ -281,67 +381,77 @@ const Ventes = () => {
             </button>
           </div>
 
-          {/* Ligne 2 : produit */}
+          {/* Ligne 2 : catégorie + produit */}
           <div
             style={{
-              fontSize: 13,
-              color: "var(--dark-color)",
-              marginBottom: 8,
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              flexWrap: "wrap",
+              marginBottom: 5,
             }}
           >
-            {grouped ? (
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 5,
-                  color: "#1d4ed8",
-                  fontWeight: 600,
-                }}
-              >
-                <FaBoxOpen />
-                {vente.produits.length} produits
-              </span>
-            ) : (
-              <span>
-                {vente.nomProduit}
-                {vente.tailleProduit && (
-                  <span style={{ color: "var(--secondary-color)" }}>
-                    {" "}
-                    · {vente.tailleProduit}
-                  </span>
-                )}
-              </span>
-            )}
+            <CategorieBadge categorie={catVente} />
+            <span
+              style={{
+                fontSize: 13,
+                color: "var(--dark-color)",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {grouped ? (
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                    color: "#1d4ed8",
+                    fontWeight: 600,
+                  }}
+                >
+                  <FaBoxOpen />
+                  {vente.produits.length} produits
+                </span>
+              ) : (
+                <>
+                  {vente.nomProduit}
+                  {vente.tailleProduit && (
+                    <span style={{ color: "var(--secondary-color)" }}>
+                      {" "}
+                      · {vente.tailleProduit}
+                    </span>
+                  )}
+                </>
+              )}
+            </span>
           </div>
 
           {/* Ligne 3 : montants */}
           <div
             style={{
               display: "flex",
-              gap: 16,
+              gap: 10,
               flexWrap: "wrap",
-              fontSize: 13,
-              marginBottom: 10,
+              fontSize: 12,
+              marginBottom: 7,
             }}
           >
             <span style={{ color: "var(--secondary-color)" }}>
-              Vente :{" "}
+              Vente&nbsp;:{" "}
               <strong style={{ color: "var(--dark-color)" }}>
                 {fmt(vente.prixVente)}
               </strong>
             </span>
             {vente.fraisLivraison > 0 && (
               <span style={{ color: "var(--secondary-color)" }}>
-                Frais :{" "}
-                <strong style={{ color: "var(--dark-color)" }}>
-                  {fmt(vente.fraisLivraison)}
-                </strong>
+                Frais&nbsp;: <strong>{fmt(vente.fraisLivraison)}</strong>
               </span>
             )}
             <span style={{ color: "var(--secondary-color)" }}>
-              Total :{" "}
-              <strong style={{ color: "var(--success-color)", fontSize: 14 }}>
+              Total&nbsp;:{" "}
+              <strong style={{ color: "var(--success-color)" }}>
                 {fmt(vente.montantTotal)}
               </strong>
             </span>
@@ -355,14 +465,10 @@ const Ventes = () => {
               alignItems: "center",
             }}
           >
-            <div style={{ fontSize: 12, color: "var(--secondary-color)" }}>
-              {vente.livreur ? (
-                <span>🚚 {vente.livreur.nom}</span>
-              ) : (
-                <span>Pas de livreur</span>
-              )}
-            </div>
-            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <span style={{ fontSize: 11, color: "var(--secondary-color)" }}>
+              {vente.livreur ? `🚚 ${vente.livreur.nom}` : "Pas de livreur"}
+            </span>
+            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
               {grouped && (
                 <button
                   onClick={() => toggleExpand(vente._id)}
@@ -371,22 +477,21 @@ const Ventes = () => {
                     color: "#1d4ed8",
                     border: "none",
                     borderRadius: 6,
-                    padding: "5px 8px",
+                    padding: "4px 7px",
                     cursor: "pointer",
-                    fontSize: 12,
+                    fontSize: 11,
                     display: "flex",
                     alignItems: "center",
-                    gap: 4,
+                    gap: 3,
                   }}
                 >
                   {expanded ? <FaChevronUp /> : <FaChevronDown />}
-                  {expanded ? "Masquer" : "Détails"}
+                  {expanded ? "Masquer" : "Voir"}
                 </button>
               )}
               <Link
                 to={`/ventes/${vente._id}/edit`}
                 className="btn btn-sm btn-icon btn-secondary"
-                title="Modifier"
               >
                 <FaEdit />
               </Link>
@@ -394,7 +499,6 @@ const Ventes = () => {
                 <button
                   className="btn btn-sm btn-icon btn-danger"
                   onClick={() => handleAnnuler(vente._id)}
-                  title="Annuler"
                 >
                   <FaBan />
                 </button>
@@ -402,7 +506,6 @@ const Ventes = () => {
               <button
                 className="btn btn-sm btn-icon btn-danger"
                 onClick={() => handleDelete(vente._id, vente.nomClient)}
-                title="Supprimer"
               >
                 <FaTrash />
               </button>
@@ -410,7 +513,7 @@ const Ventes = () => {
           </div>
         </div>
 
-        {/* Sous-produits (vente groupée) */}
+        {/* Sous-produits */}
         {grouped && expanded && (
           <div
             style={{
@@ -422,7 +525,7 @@ const Ventes = () => {
               <div
                 key={pe._id || idx}
                 style={{
-                  padding: "10px 16px",
+                  padding: "8px 13px",
                   borderBottom:
                     idx < vente.produits.length - 1
                       ? "1px solid var(--border-color)"
@@ -430,11 +533,20 @@ const Ventes = () => {
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
+                  gap: 8,
                 }}
               >
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>
-                    <span style={{ color: "#94a3b8", marginRight: 6 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    <span style={{ color: "#94a3b8", marginRight: 4 }}>
                       #{idx + 1}
                     </span>
                     {pe.nomProduit}
@@ -452,22 +564,27 @@ const Ventes = () => {
                   </div>
                   <div
                     style={{
-                      fontSize: 12,
-                      color: "var(--secondary-color)",
-                      marginTop: 2,
+                      display: "flex",
+                      gap: 6,
+                      alignItems: "center",
+                      marginTop: 3,
                     }}
                   >
-                    {fmt(pe.prixVente)}
+                    <span
+                      style={{ fontSize: 12, color: "var(--secondary-color)" }}
+                    >
+                      {fmt(pe.prixVente)}
+                    </span>
+                    <CategorieBadge categorie={pe.categorie || "autres"} />
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 6 }}>
+                <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
                   {vente.statutLivraison !== "annulé" && (
                     <button
                       className="btn btn-sm btn-icon btn-secondary"
                       onClick={() =>
                         navigate(`/ventes/${vente._id}/produits/${pe._id}/edit`)
                       }
-                      title="Modifier ce produit"
                     >
                       <FaEdit />
                     </button>
@@ -483,7 +600,6 @@ const Ventes = () => {
                             pe.nomProduit,
                           )
                         }
-                        title="Retirer"
                       >
                         <FaTrash />
                       </button>
@@ -497,37 +613,172 @@ const Ventes = () => {
     );
   };
 
+  /* ── Render ───────────────────────────────────────────────────────────── */
   return (
     <div className="main-content">
+      {/* Header */}
       <div className="page-header">
-        <h1 className="page-title">Gestion des Ventes</h1>
+        <h1 className="page-title">Ventes</h1>
         <Link to="/ventes/new" className="btn btn-primary">
-          <FaPlus />
-          {!isMobile && " Nouvelle vente"}
+          <FaPlus /> {!isMobile && "Nouvelle vente"}
         </Link>
       </div>
 
-      {/* Filtres */}
+      {/* ── Onglets catégories — scroll horizontal sur mobile ─────────── */}
+      <div
+        style={{
+          display: "flex",
+          gap: 6,
+          marginBottom: 12,
+          overflowX: "auto",
+          paddingBottom: 4,
+          WebkitOverflowScrolling: "touch",
+          scrollbarWidth: "none",
+        }}
+      >
+        {CATEGORIES_CONFIG.map((cfg) => {
+          const active = activeCategory === cfg.key;
+          return (
+            <button
+              key={cfg.key}
+              onClick={() => setActiveCategory(cfg.key)}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 3,
+                padding: "8px 12px",
+                borderRadius: 10,
+                cursor: "pointer",
+                border: active
+                  ? `2px solid ${cfg.border}`
+                  : "2px solid transparent",
+                background: active ? cfg.lightBg : "white",
+                boxShadow: active
+                  ? `0 2px 6px ${cfg.color}25`
+                  : "0 1px 3px rgba(0,0,0,0.08)",
+                transition: "all 0.15s",
+                flexShrink: 0,
+                minWidth: isMobile ? 76 : 100,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ fontSize: 13 }}>{cfg.icon}</span>
+                <span
+                  style={{
+                    fontSize: isMobile ? 11 : 12,
+                    fontWeight: active ? 700 : 500,
+                    color: active ? cfg.text : "var(--secondary-color)",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {isMobile && cfg.key !== "toutes"
+                    ? cfg.label.split(
+                        " ",
+                      )[0] /* "Chaussures", "Robes", "Autres" sur mobile */
+                    : cfg.label}
+                </span>
+              </div>
+              <span
+                style={{
+                  background: active ? cfg.color : "#e2e8f0",
+                  color: active ? "white" : "var(--secondary-color)",
+                  borderRadius: 20,
+                  padding: "0px 6px",
+                  fontSize: 10,
+                  fontWeight: 700,
+                }}
+              >
+                {counts[cfg.key] || 0}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── Mini-stats (vue Toutes uniquement) ────────────────────────── */}
+      {activeCategory === "toutes" && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, 1fr)",
+            gap: isMobile ? 6 : 10,
+            marginBottom: 12,
+          }}
+        >
+          {CATEGORIES_CONFIG.filter((c) => c.key !== "toutes").map((cfg) => {
+            const list = ventes.filter(
+              (v) =>
+                getCategorieVente(v) === cfg.key &&
+                v.statutLivraison !== "annulé",
+            );
+            const total = list.reduce((s, v) => s + (v.prixVente || 0), 0);
+            return (
+              <button
+                key={cfg.key}
+                onClick={() => setActiveCategory(cfg.key)}
+                style={{
+                  background: cfg.lightBg,
+                  border: `1px solid ${cfg.border}`,
+                  borderRadius: 10,
+                  padding: isMobile ? "8px 8px" : "10px 14px",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  width: "100%",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: isMobile ? 12 : 13,
+                    fontWeight: 700,
+                    color: cfg.text,
+                    marginBottom: 2,
+                  }}
+                >
+                  {cfg.icon} {isMobile ? cfg.label.split(" ")[0] : cfg.label}
+                </div>
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: cfg.text,
+                    opacity: 0.75,
+                    marginBottom: 2,
+                  }}
+                >
+                  {list.length} vente{list.length > 1 ? "s" : ""}
+                </div>
+                <div
+                  style={{
+                    fontSize: isMobile ? 11 : 13,
+                    fontWeight: 700,
+                    color: cfg.text,
+                  }}
+                >
+                  {new Intl.NumberFormat("fr-FR").format(total)} AR
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Filtres ───────────────────────────────────────────────────── */}
       <div
         style={{
           background: "white",
-          padding: isMobile ? "12px" : "16px 20px",
+          padding: "11px 13px",
           borderRadius: 8,
           boxShadow: "var(--shadow)",
-          marginBottom: 16,
+          marginBottom: 10,
           display: "flex",
           flexDirection: "column",
-          gap: 10,
+          gap: 8,
         }}
       >
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
           <select
             className="form-select"
-            style={{
-              flex: "0 0 auto",
-              minWidth: 130,
-              fontSize: isMobile ? 13 : 14,
-            }}
+            style={{ flex: "0 0 auto", width: 135, fontSize: 13 }}
             value={filterStatut}
             onChange={(e) => setFilterStatut(e.target.value)}
           >
@@ -540,8 +791,8 @@ const Ventes = () => {
           <input
             type="text"
             className="form-input"
-            style={{ flex: 1, minWidth: 120 }}
-            placeholder="Rechercher client, produit..."
+            style={{ flex: 1, minWidth: 100, fontSize: 13 }}
+            placeholder="Rechercher client, produit…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -549,85 +800,101 @@ const Ventes = () => {
         <div
           style={{
             display: "flex",
-            gap: 6,
+            gap: 5,
             flexWrap: "wrap",
             alignItems: "center",
           }}
         >
-          <PeriodeBtn value="tous" label="Tout" />
-          <PeriodeBtn value="jour" label="Aujourd'hui" />
-          <PeriodeBtn value="semaine" label="Semaine" />
-          <PeriodeBtn value="mois" label="Mois" />
+          <PBtn value="tous" label="Tout" />
+          <PBtn value="jour" label="Auj." />
+          <PBtn value="semaine" label="Semaine" />
+          <PBtn value="mois" label="Mois" />
           <input
             type="date"
             className="form-input"
             style={{
-              padding: "6px 10px",
-              fontSize: 13,
-              width: isMobile ? "100%" : 150,
+              padding: "5px 8px",
+              fontSize: 12,
+              width: isMobile ? "100%" : 145,
               border:
                 filterPeriode === "date"
                   ? "2px solid var(--primary-color)"
                   : "1px solid var(--border-color)",
               borderRadius: 6,
             }}
-            value={filterDateSpecifique}
+            value={filterDateSpec}
             onChange={(e) => {
-              setFilterDateSpecifique(e.target.value);
+              setFilterDateSpec(e.target.value);
               setFilterPeriode(e.target.value ? "date" : "tous");
             }}
           />
         </div>
       </div>
 
-      {/* Résumé période */}
-      {filterPeriode !== "tous" && (
+      {/* ── Résumé ────────────────────────────────────────────────────── */}
+      {(filterPeriode !== "tous" || activeCategory !== "toutes") && (
         <div
           style={{
             background: "#eff6ff",
             border: "1px solid #bfdbfe",
             borderRadius: 8,
-            padding: "10px 16px",
-            marginBottom: 16,
+            padding: "8px 13px",
+            marginBottom: 10,
             display: "flex",
             justifyContent: "space-between",
             flexWrap: "wrap",
-            gap: 6,
+            gap: 4,
           }}
         >
           <span style={{ fontSize: 13, color: "#1d4ed8" }}>
-            <strong>{filteredVentes.length}</strong> vente(s)
+            {activeCategory !== "toutes" && (
+              <span>
+                {CATEGORIES_CONFIG.find((c) => c.key === activeCategory)?.icon}{" "}
+                <strong>
+                  {
+                    CATEGORIES_CONFIG.find((c) => c.key === activeCategory)
+                      ?.label
+                  }
+                </strong>
+                {" · "}
+              </span>
+            )}
+            <strong>{ventesFiltered.length}</strong> vente(s)
           </span>
           <span style={{ fontSize: 13, color: "#1d4ed8", fontWeight: 700 }}>
-            Total : {fmt(totalFiltre)}
+            {fmt(totalFiltre)}
           </span>
         </div>
       )}
 
-      {/* Contenu : cartes sur mobile, tableau sur desktop */}
-      {filteredVentes.length === 0 ? (
+      {/* ── Contenu ───────────────────────────────────────────────────── */}
+      {ventesFiltered.length === 0 ? (
         <div className="table-container">
-          <p className="no-data">Aucune vente trouvée</p>
+          <p className="no-data">
+            {activeCategory !== "toutes"
+              ? `Aucune vente dans "${CATEGORIES_CONFIG.find((c) => c.key === activeCategory)?.label}"`
+              : "Aucune vente trouvée"}
+          </p>
         </div>
       ) : isMobile ? (
-        /* ── VUE CARTES (mobile) ── */
         <div>
-          {filteredVentes.map((vente) => (
-            <VenteCard key={vente._id} vente={vente} />
+          {ventesFiltered.map((v) => (
+            <VenteCard key={v._id} vente={v} />
           ))}
         </div>
       ) : (
-        /* ── VUE TABLEAU (desktop) ── */
+        /* ── Tableau desktop ─────────────────────────────────────────── */
         <div className="table-container">
           <table className="data-table">
             <thead>
               <tr>
-                <th style={{ width: 36 }}></th>
+                <th style={{ width: 32 }}></th>
                 <th>Date</th>
                 <th>Client</th>
                 <th>Produit(s)</th>
+                <th>Catégorie</th>
                 <th>Destination</th>
-                <th>Prix vente</th>
+                <th>Vente</th>
                 <th>Frais</th>
                 <th>Total</th>
                 <th>Livreur</th>
@@ -636,10 +903,12 @@ const Ventes = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredVentes.map((vente) => {
+              {ventesFiltered.map((vente) => {
                 const grouped = isGroupee(vente);
                 const expanded = expandedVentes.has(vente._id);
                 const canAdd = vente.statutLivraison !== "annulé";
+                const catVente = getCategorieVente(vente);
+
                 return (
                   <Fragment key={vente._id}>
                     <tr style={grouped ? { background: "#f0f9ff" } : {}}>
@@ -652,7 +921,7 @@ const Ventes = () => {
                               color: "#1d4ed8",
                               border: "none",
                               borderRadius: 6,
-                              padding: "4px 8px",
+                              padding: "3px 7px",
                               cursor: "pointer",
                             }}
                           >
@@ -660,13 +929,15 @@ const Ventes = () => {
                           </button>
                         )}
                       </td>
-                      <td>{fmtDate(vente.dateVente)}</td>
+                      <td style={{ whiteSpace: "nowrap" }}>
+                        {fmtDate(vente.dateVente)}
+                      </td>
                       <td>
                         <div
                           style={{
                             display: "flex",
                             alignItems: "center",
-                            gap: 8,
+                            gap: 7,
                           }}
                         >
                           <div>
@@ -681,20 +952,19 @@ const Ventes = () => {
                               onClick={() =>
                                 navigate(`/ventes/${vente._id}/ajouter-produit`)
                               }
-                              title="Ajouter un produit"
                               style={{
                                 flexShrink: 0,
                                 background: "#2563eb",
                                 color: "white",
                                 border: "none",
                                 borderRadius: "50%",
-                                width: 26,
-                                height: 26,
+                                width: 24,
+                                height: 24,
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
                                 cursor: "pointer",
-                                fontSize: 11,
+                                fontSize: 10,
                               }}
                             >
                               <FaPlus />
@@ -708,7 +978,7 @@ const Ventes = () => {
                             style={{
                               display: "inline-flex",
                               alignItems: "center",
-                              gap: 6,
+                              gap: 5,
                               color: "#1d4ed8",
                               fontWeight: 600,
                               fontSize: 13,
@@ -717,7 +987,7 @@ const Ventes = () => {
                             <FaBoxOpen /> {vente.produits.length} produits
                           </span>
                         ) : (
-                          <span>
+                          <>
                             {vente.nomProduit}
                             {vente.tailleProduit && (
                               <small className="text-secondary">
@@ -725,15 +995,18 @@ const Ventes = () => {
                                 · {vente.tailleProduit}
                               </small>
                             )}
-                          </span>
+                          </>
                         )}
+                      </td>
+                      <td>
+                        <CategorieBadge categorie={catVente} />
                       </td>
                       <td>
                         <span
                           style={{
                             fontSize: 12,
-                            padding: "2px 8px",
-                            borderRadius: 12,
+                            padding: "2px 7px",
+                            borderRadius: 10,
                             background:
                               vente.destinationClient === "Antsirabe"
                                 ? "#dbeafe"
@@ -792,7 +1065,6 @@ const Ventes = () => {
                           <Link
                             to={`/ventes/${vente._id}/edit`}
                             className="btn btn-sm btn-icon btn-secondary"
-                            title="Modifier"
                           >
                             <FaEdit />
                           </Link>
@@ -800,7 +1072,6 @@ const Ventes = () => {
                             <button
                               className="btn btn-sm btn-icon btn-danger"
                               onClick={() => handleAnnuler(vente._id)}
-                              title="Annuler"
                             >
                               <FaBan />
                             </button>
@@ -810,13 +1081,13 @@ const Ventes = () => {
                             onClick={() =>
                               handleDelete(vente._id, vente.nomClient)
                             }
-                            title="Supprimer"
                           >
                             <FaTrash />
                           </button>
                         </div>
                       </td>
                     </tr>
+
                     {grouped &&
                       expanded &&
                       vente.produits.map((pe, idx) => (
@@ -838,7 +1109,7 @@ const Ventes = () => {
                             #{idx + 1}
                           </td>
                           <td></td>
-                          <td style={{ paddingLeft: 16 }}>
+                          <td style={{ paddingLeft: 14 }}>
                             <strong>{pe.nomProduit}</strong>
                             {pe.tailleProduit && (
                               <small className="text-secondary">
@@ -846,6 +1117,11 @@ const Ventes = () => {
                                 · {pe.tailleProduit}
                               </small>
                             )}
+                          </td>
+                          <td>
+                            <CategorieBadge
+                              categorie={pe.categorie || "autres"}
+                            />
                           </td>
                           <td></td>
                           <td>{fmt(pe.prixVente)}</td>
@@ -860,7 +1136,6 @@ const Ventes = () => {
                                       `/ventes/${vente._id}/produits/${pe._id}/edit`,
                                     )
                                   }
-                                  title="Modifier ce produit"
                                 >
                                   <FaEdit />
                                 </button>
@@ -876,7 +1151,6 @@ const Ventes = () => {
                                         pe.nomProduit,
                                       )
                                     }
-                                    title="Retirer"
                                   >
                                     <FaTrash />
                                   </button>
