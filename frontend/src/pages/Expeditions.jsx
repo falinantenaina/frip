@@ -9,8 +9,10 @@ import {
   FaEdit,
   FaPlus,
   FaRocket,
+  FaSave,
   FaTimes,
   FaTrash,
+  FaUnlink,
 } from "react-icons/fa";
 import { toast } from "react-toastify";
 import useAppStore from "../stores/appStore";
@@ -40,13 +42,37 @@ const ExpeditionModal = ({ expedition, onClose }) => {
       : format(new Date(), "yyyy-MM-dd"),
     statut: expedition?.statut || "en_preparation",
     notes: expedition?.notes || "",
+    fraisColis: expedition?.fraisColis?.toString() || "0",
+    modeCommissionnaire: expedition?.modeCommissionnaire || "fixe",
+    salaireCommissionnaire:
+      expedition?.salaireCommissionnaire?.toString() || "0",
+    pourcentageCommissionnaire:
+      expedition?.pourcentageCommissionnaire?.toString() || "0",
   });
 
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
+  const totalVentes = expedition?.totalVentes || 0;
+  const fraisColis = parseFloat(form.fraisColis) || 0;
+  const salaire =
+    form.modeCommissionnaire === "fixe"
+      ? parseFloat(form.salaireCommissionnaire) || 0
+      : (totalVentes * (parseFloat(form.pourcentageCommissionnaire) || 0)) /
+        100;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const payload = { ...form, dateExpedition: new Date(form.dateExpedition) };
+    const payload = {
+      ...form,
+      dateExpedition: new Date(form.dateExpedition),
+      fraisColis: parseFloat(form.fraisColis) || 0,
+      salaireCommissionnaire:
+        form.modeCommissionnaire === "fixe"
+          ? parseFloat(form.salaireCommissionnaire) || 0
+          : 0,
+      pourcentageCommissionnaire:
+        parseFloat(form.pourcentageCommissionnaire) || 0,
+    };
     const result = isEdit
       ? await updateExpedition(expedition._id, payload)
       : await createExpedition(payload);
@@ -67,7 +93,7 @@ const ExpeditionModal = ({ expedition, onClose }) => {
       <div
         className="modal"
         onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: 520, width: "calc(100% - 24px)" }}
+        style={{ maxWidth: 540, width: "calc(100% - 24px)" }}
       >
         <div className="modal-header">
           <h3 className="modal-title">
@@ -79,6 +105,7 @@ const ExpeditionModal = ({ expedition, onClose }) => {
         </div>
         <div className="modal-body">
           <form onSubmit={handleSubmit}>
+            {/* Infos de base */}
             <div className="form-group">
               <label className="form-label">
                 Nom de l'expédition *
@@ -89,7 +116,7 @@ const ExpeditionModal = ({ expedition, onClose }) => {
                     marginLeft: 8,
                   }}
                 >
-                  Ex: Vague 112, Produit Noël
+                  Ex: Vague 112
                 </small>
               </label>
               <input
@@ -141,6 +168,128 @@ const ExpeditionModal = ({ expedition, onClose }) => {
                 </select>
               </div>
             )}
+
+            {/* Frais & Commission — toujours visibles en édition */}
+            {isEdit && (
+              <div
+                style={{
+                  background: "var(--light-color)",
+                  borderRadius: 8,
+                  padding: 14,
+                  marginBottom: 16,
+                  border: "1px solid var(--border-color)",
+                }}
+              >
+                <p style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>
+                  💰 Frais de l'expédition
+                </p>
+                <div className="form-group">
+                  <label className="form-label">
+                    Frais colis / transport (AR)
+                  </label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    value={form.fraisColis}
+                    onChange={(e) => set("fraisColis", e.target.value)}
+                    min="0"
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Mode commissionnaire</label>
+                  <div style={{ display: "flex", gap: 20, marginBottom: 10 }}>
+                    {["fixe", "pourcentage"].map((m) => (
+                      <label
+                        key={m}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          value={m}
+                          checked={form.modeCommissionnaire === m}
+                          onChange={() => set("modeCommissionnaire", m)}
+                        />
+                        <span>
+                          {m === "fixe" ? "Montant fixe" : "% sur ventes"}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  {form.modeCommissionnaire === "fixe" ? (
+                    <input
+                      type="number"
+                      className="form-input"
+                      placeholder="Salaire commissionnaire (AR)"
+                      value={form.salaireCommissionnaire}
+                      onChange={(e) =>
+                        set("salaireCommissionnaire", e.target.value)
+                      }
+                      min="0"
+                    />
+                  ) : (
+                    <div
+                      style={{ display: "flex", gap: 10, alignItems: "center" }}
+                    >
+                      <input
+                        type="number"
+                        className="form-input"
+                        placeholder="%"
+                        value={form.pourcentageCommissionnaire}
+                        onChange={(e) =>
+                          set("pourcentageCommissionnaire", e.target.value)
+                        }
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        style={{ flex: 1 }}
+                      />
+                      <span
+                        style={{
+                          fontSize: 13,
+                          color: "var(--secondary-color)",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        = {fmtAR(salaire)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                {(fraisColis > 0 || salaire > 0) && totalVentes > 0 && (
+                  <div
+                    style={{
+                      marginTop: 12,
+                      padding: "8px 10px",
+                      background: "white",
+                      borderRadius: 6,
+                      fontSize: 12,
+                      display: "flex",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <span style={{ color: "var(--secondary-color)" }}>
+                      Bénéfice net estimé :
+                    </span>
+                    <strong
+                      style={{
+                        color:
+                          totalVentes - fraisColis - salaire >= 0
+                            ? "var(--success-color)"
+                            : "var(--danger-color)",
+                      }}
+                    >
+                      {fmtAR(totalVentes - fraisColis - salaire)}
+                    </strong>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="form-group">
               <label className="form-label">Notes</label>
               <textarea
@@ -160,7 +309,7 @@ const ExpeditionModal = ({ expedition, onClose }) => {
                 Annuler
               </button>
               <button type="submit" className="btn btn-primary">
-                {isEdit ? "Modifier" : "Créer"}
+                <FaSave /> {isEdit ? "Enregistrer" : "Créer"}
               </button>
             </div>
           </form>
@@ -171,7 +320,7 @@ const ExpeditionModal = ({ expedition, onClose }) => {
   );
 };
 
-// ── Modal Expédier (saisir frais au moment d'expédier) ───────────────────────
+// ── Modal Expédier ───────────────────────────────────────────────────────────
 const ExpedierModal = ({ expedition, onClose }) => {
   const { expedierExpedition } = useAppStore();
   const [form, setForm] = useState({
@@ -262,7 +411,6 @@ const ExpedierModal = ({ expedition, onClose }) => {
                 required
               />
             </div>
-
             <div
               style={{
                 background: "var(--light-color)",
@@ -352,8 +500,6 @@ const ExpedierModal = ({ expedition, onClose }) => {
                 )}
               </div>
             </div>
-
-            {/* Bilan */}
             <div
               style={{
                 background: "#f0fdf4",
@@ -429,7 +575,7 @@ const ExpedierModal = ({ expedition, onClose }) => {
                   fontWeight: 700,
                 }}
               >
-                <span>Net estimé</span>
+                <span>Bénéfice net</span>
                 <span
                   style={{
                     color:
@@ -443,7 +589,6 @@ const ExpedierModal = ({ expedition, onClose }) => {
                 </span>
               </div>
             </div>
-
             <div className="modal-footer">
               <button
                 type="button"
@@ -581,7 +726,6 @@ const AjouterProduitsModal = ({ expedition, onClose }) => {
               </button>
             ))}
           </div>
-
           {mode === "ventes" ? (
             <div>
               <p
@@ -755,7 +899,6 @@ const AjouterProduitsModal = ({ expedition, onClose }) => {
               </button>
             </div>
           )}
-
           <div
             style={{
               display: "flex",
@@ -785,11 +928,164 @@ const AjouterProduitsModal = ({ expedition, onClose }) => {
   );
 };
 
-// ── Page principale ──────────────────────────────────────────────────────────
+// ── Modal Modifier une vente depuis l'expédition ─────────────────────────────
+const EditVenteExpeditionModal = ({ vente, livreurs, onClose }) => {
+  const [form, setForm] = useState({
+    statutLivraison: vente.statutLivraison || "en_attente",
+    livreur: vente.livreur?._id || vente.livreur || "",
+    lieuLivraison: vente.lieuLivraison || "",
+    fraisLivraison: vente.fraisLivraison?.toString() || "0",
+    commentaires: vente.commentaires || "",
+  });
+  const [loading, setLoading] = useState(false);
+  const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await api.put(`/ventes/${vente._id}`, {
+        ...form,
+        fraisLivraison: parseFloat(form.fraisLivraison) || 0,
+        livreur: form.livreur || null,
+      });
+      toast.success("Vente modifiée ✅");
+      onClose(true);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Erreur");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return createPortal(
+    <div
+      className="modal-overlay"
+      onClick={() => onClose(false)}
+      style={{ zIndex: 10000 }}
+    >
+      <div
+        className="modal"
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: 480, width: "calc(100% - 24px)" }}
+      >
+        <div className="modal-header">
+          <div>
+            <h3 className="modal-title">✏️ Modifier — {vente.nomClient}</h3>
+            <p
+              style={{
+                fontSize: 13,
+                color: "var(--secondary-color)",
+                marginTop: 3,
+              }}
+            >
+              {vente.produits?.length > 1
+                ? `${vente.produits.length} produits`
+                : vente.nomProduit}{" "}
+              · {fmtAR(vente.prixVente)}
+            </p>
+          </div>
+          <button className="modal-close" onClick={() => onClose(false)}>
+            <FaTimes />
+          </button>
+        </div>
+        <div className="modal-body">
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label className="form-label">Statut de livraison</label>
+              <select
+                className="form-select"
+                value={form.statutLivraison}
+                onChange={(e) => set("statutLivraison", e.target.value)}
+              >
+                <option value="en_attente">⏳ En attente</option>
+                <option value="en_cours">🚚 En cours</option>
+                <option value="livré">✅ Livré</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Livreur</label>
+              <select
+                className="form-select"
+                value={form.livreur}
+                onChange={(e) => set("livreur", e.target.value)}
+              >
+                <option value="">Aucun livreur</option>
+                {livreurs.map((l) => (
+                  <option key={l._id} value={l._id}>
+                    {l.nom}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Lieu de livraison</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Adresse..."
+                  value={form.lieuLivraison}
+                  onChange={(e) => set("lieuLivraison", e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Frais livraison (AR)</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  min="0"
+                  value={form.fraisLivraison}
+                  onChange={(e) => set("fraisLivraison", e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Commentaires</label>
+              <textarea
+                className="form-textarea"
+                rows={2}
+                placeholder="Notes..."
+                value={form.commentaires}
+                onChange={(e) => set("commentaires", e.target.value)}
+              />
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => onClose(false)}
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={loading}
+              >
+                <FaSave /> {loading ? "Enregistrement..." : "Enregistrer"}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+};
+
 // ── Modal Détail ventes d'une expédition ─────────────────────────────────────
 const VentesExpeditionModal = ({ expedition, onClose }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [livreurs, setLivreurs] = useState([]);
+  const [ventesDispos, setVentesDispos] = useState([]);
+  const [editingVente, setEditingVente] = useState(null);
+  const [showAddSection, setShowAddSection] = useState(false);
+  const [selectedVenteId, setSelectedVenteId] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const isEnPrepa = expedition.statut === "en_preparation";
 
   const loadDetail = async () => {
     setLoading(true);
@@ -803,9 +1099,45 @@ const VentesExpeditionModal = ({ expedition, onClose }) => {
     }
   };
 
+  const loadVentesDispos = async () => {
+    try {
+      const r = await api.get(
+        `/expeditions/ventes-disponibles?destination=${expedition.destination}`,
+      );
+      setVentesDispos(r.data.data);
+    } catch {}
+  };
+
   useEffect(() => {
     loadDetail();
+    api
+      .get("/livreurs")
+      .then((r) => setLivreurs(r.data.data))
+      .catch(() => {});
+    loadVentesDispos();
   }, [expedition._id]);
+
+  const handleRattacher = async () => {
+    if (!selectedVenteId) {
+      toast.error("Sélectionner une vente");
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await api.put(`/expeditions/${expedition._id}/rattacher-vente`, {
+        venteId: selectedVenteId,
+      });
+      toast.success("Vente rattachée ✅");
+      setSelectedVenteId("");
+      setShowAddSection(false);
+      loadDetail();
+      loadVentesDispos();
+    } catch (e) {
+      toast.error(e.response?.data?.message || "Erreur");
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   const handleAnnulerVente = async (venteId, nomClient) => {
     const raison = window.prompt(
@@ -817,6 +1149,40 @@ const VentesExpeditionModal = ({ expedition, onClose }) => {
         raisonAnnulation: raison || "Annulée depuis expédition",
       });
       toast.success(`Commande de ${nomClient} annulée`);
+      loadDetail();
+      loadVentesDispos();
+    } catch (e) {
+      toast.error(e.response?.data?.message || "Erreur");
+    }
+  };
+
+  const handleDetacher = async (venteId, nomClient) => {
+    if (
+      !window.confirm(
+        `Retirer la vente de ${nomClient} de cette expédition ?\nLa vente sera conservée dans le système.`,
+      )
+    )
+      return;
+    try {
+      await api.put(`/expeditions/${expedition._id}/detacher-vente/${venteId}`);
+      toast.success(`Vente de ${nomClient} retirée de l'expédition`);
+      loadDetail();
+      loadVentesDispos();
+    } catch (e) {
+      toast.error(e.response?.data?.message || "Erreur");
+    }
+  };
+
+  const handleDeleteVente = async (venteId, nomClient) => {
+    if (
+      !window.confirm(
+        `Supprimer définitivement la vente de ${nomClient} ?\nCette action est irréversible.`,
+      )
+    )
+      return;
+    try {
+      await api.delete(`/ventes/${venteId}`);
+      toast.success(`Vente de ${nomClient} supprimée`);
       loadDetail();
     } catch (e) {
       toast.error(e.response?.data?.message || "Erreur");
@@ -838,215 +1204,417 @@ const VentesExpeditionModal = ({ expedition, onClose }) => {
       annulé: "Annulé",
     })[s] || s;
 
+  const activeVentes =
+    data?.ventes?.filter((v) => v.statutLivraison !== "annulé") || [];
+  const caActif = activeVentes.reduce((s, v) => s + v.prixVente, 0);
+
   return createPortal(
-    <div
-      className="modal-overlay"
-      onClick={() => onClose()}
-      style={{ zIndex: 9999 }}
-    >
+    <>
       <div
-        className="modal"
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          maxWidth: 780,
-          width: "calc(100% - 24px)",
-          maxHeight: "90vh",
-          overflowY: "auto",
-        }}
+        className="modal-overlay"
+        onClick={() => onClose()}
+        style={{ zIndex: 9999 }}
       >
-        <div className="modal-header">
-          <div>
-            <h3 className="modal-title">👥 Ventes — {expedition.nom}</h3>
-            <p
-              style={{
-                fontSize: 13,
-                color: "var(--secondary-color)",
-                marginTop: 4,
-              }}
-            >
-              {expedition.destination} · {fmtDate(expedition.dateExpedition)}
-            </p>
-          </div>
-          <button className="modal-close" onClick={() => onClose()}>
-            <FaTimes />
-          </button>
-        </div>
-        <div className="modal-body">
-          {loading ? (
-            <div className="loading">
-              <div className="spinner"></div>
-            </div>
-          ) : !data?.ventes?.length ? (
-            <p className="no-data">Aucune vente rattachée à cette expédition</p>
-          ) : (
-            data.ventes.map((vente) => (
-              <div
-                key={vente._id}
+        <div
+          className="modal"
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            maxWidth: 820,
+            width: "calc(100% - 24px)",
+            maxHeight: "90vh",
+            overflowY: "auto",
+          }}
+        >
+          <div className="modal-header">
+            <div>
+              <h3 className="modal-title">👥 Ventes — {expedition.nom}</h3>
+              <p
                 style={{
-                  border: "1px solid var(--border-color)",
-                  borderRadius: 10,
-                  marginBottom: 12,
-                  overflow: "hidden",
-                  opacity: vente.statutLivraison === "annulé" ? 0.55 : 1,
+                  fontSize: 13,
+                  color: "var(--secondary-color)",
+                  marginTop: 4,
                 }}
               >
-                <div
-                  style={{
-                    background: "var(--light-color)",
-                    padding: "10px 14px",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                    gap: 8,
-                  }}
-                >
-                  <div>
-                    <strong style={{ fontSize: 15 }}>{vente.nomClient}</strong>
-                    <span
+                {expedition.destination} · {fmtDate(expedition.dateExpedition)}
+                {data && (
+                  <span> · {activeVentes.length} vente(s) active(s)</span>
+                )}
+              </p>
+            </div>
+            <button className="modal-close" onClick={() => onClose()}>
+              <FaTimes />
+            </button>
+          </div>
+          <div className="modal-body">
+            {/* ── Section rattacher une vente (seulement en préparation) ── */}
+            {isEnPrepa && (
+              <div style={{ marginBottom: 16 }}>
+                {!showAddSection ? (
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => setShowAddSection(true)}
+                  >
+                    <FaPlus /> Rattacher une vente
+                  </button>
+                ) : (
+                  <div
+                    style={{
+                      background: "#f0fdf4",
+                      border: "1px solid #bbf7d0",
+                      borderRadius: 10,
+                      padding: 14,
+                    }}
+                  >
+                    <p
                       style={{
-                        color: "var(--secondary-color)",
+                        fontWeight: 600,
                         fontSize: 13,
-                        marginLeft: 10,
+                        marginBottom: 10,
+                        color: "#065f46",
                       }}
                     >
-                      {vente.telephoneClient}
-                    </span>
-                    {vente.lieuLivraison && (
-                      <span
-                        style={{
-                          color: "var(--secondary-color)",
-                          fontSize: 12,
-                          marginLeft: 8,
+                      ➕ Rattacher une vente disponible —{" "}
+                      {expedition.destination}
+                    </p>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 10,
+                        alignItems: "flex-end",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 200 }}>
+                        <select
+                          className="form-select"
+                          value={selectedVenteId}
+                          onChange={(e) => setSelectedVenteId(e.target.value)}
+                        >
+                          <option value="">Sélectionner une vente...</option>
+                          {ventesDispos.map((v) => (
+                            <option key={v._id} value={v._id}>
+                              {v.nomClient} —{" "}
+                              {v.produits?.length > 1
+                                ? `${v.produits.length} produits`
+                                : v.nomProduit}{" "}
+                              — {fmtAR(v.prixVente)}
+                            </option>
+                          ))}
+                        </select>
+                        {ventesDispos.length === 0 && (
+                          <small
+                            style={{
+                              color: "var(--secondary-color)",
+                              marginTop: 4,
+                              display: "block",
+                            }}
+                          >
+                            Aucune vente disponible pour{" "}
+                            {expedition.destination}
+                          </small>
+                        )}
+                      </div>
+                      <button
+                        className="btn btn-success btn-sm"
+                        onClick={handleRattacher}
+                        disabled={actionLoading || !selectedVenteId}
+                      >
+                        {actionLoading ? "..." : "✔ Rattacher"}
+                      </button>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => {
+                          setShowAddSection(false);
+                          setSelectedVenteId("");
                         }}
                       >
-                        📍 {vente.lieuLivraison}
-                      </span>
-                    )}
-                  </div>
-                  <div
-                    style={{ display: "flex", alignItems: "center", gap: 10 }}
-                  >
-                    <strong
-                      style={{ color: "var(--success-color)", fontSize: 15 }}
-                    >
-                      {fmtAR(vente.prixVente)}
-                    </strong>
-                    <span
-                      className={`status-badge ${getStatutClass(vente.statutLivraison)}`}
-                    >
-                      {getStatutLabel(vente.statutLivraison)}
-                    </span>
-                    {vente.statutLivraison !== "annulé" && (
-                      <button
-                        className="btn btn-sm btn-danger"
-                        onClick={() =>
-                          handleAnnulerVente(vente._id, vente.nomClient)
-                        }
-                      >
-                        Annuler
+                        Fermer
                       </button>
-                    )}
-                  </div>
-                </div>
-                {(vente.produits?.length > 0
-                  ? vente.produits
-                  : [
-                      {
-                        nomProduit: vente.nomProduit,
-                        tailleProduit: vente.tailleProduit,
-                        prixVente: vente.prixVente,
-                      },
-                    ]
-                ).map((p, i) => (
-                  <div
-                    key={p._id || i}
-                    style={{
-                      padding: "8px 14px",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      borderTop: "1px solid var(--border-color)",
-                      fontSize: 13,
-                    }}
-                  >
-                    <span>
-                      <span style={{ color: "#94a3b8", marginRight: 8 }}>
-                        #{i + 1}
-                      </span>
-                      <strong>{p.nomProduit}</strong>
-                      {p.tailleProduit && (
-                        <span
-                          style={{
-                            color: "var(--secondary-color)",
-                            marginLeft: 6,
-                          }}
-                        >
-                          · {p.tailleProduit}
-                        </span>
-                      )}
-                    </span>
-                    <span
-                      style={{ color: "var(--success-color)", fontWeight: 600 }}
-                    >
-                      {fmtAR(p.prixVente)}
-                    </span>
-                  </div>
-                ))}
-                {vente.fraisLivraison > 0 && (
-                  <div
-                    style={{
-                      padding: "6px 14px",
-                      background: "#f8fafc",
-                      borderTop: "1px solid var(--border-color)",
-                      fontSize: 12,
-                      color: "var(--secondary-color)",
-                      display: "flex",
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <span>Frais livraison</span>
-                    <span>{fmtAR(vente.fraisLivraison)}</span>
+                    </div>
                   </div>
                 )}
               </div>
-            ))
-          )}
-          {data?.ventes?.length > 0 && (
-            <div
-              style={{
-                background: "var(--light-color)",
-                borderRadius: 8,
-                padding: "12px 14px",
-                borderTop: "2px solid var(--border-color)",
-                display: "flex",
-                gap: 24,
-                justifyContent: "flex-end",
-                flexWrap: "wrap",
-                fontSize: 13,
-                fontWeight: 700,
-              }}
-            >
-              <span>
-                CA actif :{" "}
-                <span style={{ color: "var(--success-color)" }}>
-                  {fmtAR(
-                    data.ventes
-                      .filter((v) => v.statutLivraison !== "annulé")
-                      .reduce((s, v) => s + v.prixVente, 0),
+            )}
+
+            {/* ── Liste des ventes ── */}
+            {loading ? (
+              <div className="loading">
+                <div className="spinner"></div>
+              </div>
+            ) : !data?.ventes?.length ? (
+              <p className="no-data">
+                Aucune vente rattachée à cette expédition
+              </p>
+            ) : (
+              data.ventes.map((vente) => (
+                <div
+                  key={vente._id}
+                  style={{
+                    border: "1px solid var(--border-color)",
+                    borderRadius: 10,
+                    marginBottom: 12,
+                    overflow: "hidden",
+                    opacity: vente.statutLivraison === "annulé" ? 0.55 : 1,
+                  }}
+                >
+                  {/* En-tête vente */}
+                  <div
+                    style={{
+                      background: "var(--light-color)",
+                      padding: "10px 14px",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                      gap: 8,
+                    }}
+                  >
+                    <div>
+                      <strong style={{ fontSize: 15 }}>
+                        {vente.nomClient}
+                      </strong>
+                      <span
+                        style={{
+                          color: "var(--secondary-color)",
+                          fontSize: 13,
+                          marginLeft: 10,
+                        }}
+                      >
+                        {vente.telephoneClient}
+                      </span>
+                      {vente.lieuLivraison && (
+                        <span
+                          style={{
+                            color: "var(--secondary-color)",
+                            fontSize: 12,
+                            marginLeft: 8,
+                          }}
+                        >
+                          📍 {vente.lieuLivraison}
+                        </span>
+                      )}
+                      {vente.livreur && (
+                        <span
+                          style={{
+                            color: "var(--secondary-color)",
+                            fontSize: 12,
+                            marginLeft: 8,
+                          }}
+                        >
+                          🚚 {vente.livreur.nom}
+                        </span>
+                      )}
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <strong
+                        style={{ color: "var(--success-color)", fontSize: 15 }}
+                      >
+                        {fmtAR(vente.prixVente)}
+                      </strong>
+                      <span
+                        className={`status-badge ${getStatutClass(vente.statutLivraison)}`}
+                      >
+                        {getStatutLabel(vente.statutLivraison)}
+                      </span>
+                      {vente.statutLivraison !== "annulé" && (
+                        <>
+                          {/* Modifier */}
+                          <button
+                            className="btn btn-sm btn-secondary"
+                            onClick={() => setEditingVente(vente)}
+                            title="Modifier la vente"
+                            style={{ padding: "4px 10px" }}
+                          >
+                            <FaEdit size={11} /> Modifier
+                          </button>
+                          {/* Détacher */}
+                          <button
+                            className="btn btn-sm btn-secondary"
+                            onClick={() =>
+                              handleDetacher(vente._id, vente.nomClient)
+                            }
+                            title="Retirer de l'expédition sans annuler"
+                            style={{ padding: "4px 10px", color: "#92400e" }}
+                          >
+                            <FaUnlink size={11} /> Retirer
+                          </button>
+                          {/* Annuler */}
+                          <button
+                            className="btn btn-sm btn-danger"
+                            onClick={() =>
+                              handleAnnulerVente(vente._id, vente.nomClient)
+                            }
+                            style={{ padding: "4px 10px" }}
+                          >
+                            <FaBan size={11} /> Annuler
+                          </button>
+                        </>
+                      )}
+                      {/* Supprimer définitivement */}
+                      <button
+                        className="btn btn-sm btn-danger"
+                        onClick={() =>
+                          handleDeleteVente(vente._id, vente.nomClient)
+                        }
+                        title="Supprimer définitivement"
+                        style={{ padding: "4px 8px" }}
+                      >
+                        <FaTrash size={11} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Produits */}
+                  {(vente.produits?.length > 0
+                    ? vente.produits
+                    : [
+                        {
+                          nomProduit: vente.nomProduit,
+                          tailleProduit: vente.tailleProduit,
+                          prixVente: vente.prixVente,
+                        },
+                      ]
+                  ).map((p, i) => (
+                    <div
+                      key={p._id || i}
+                      style={{
+                        padding: "8px 14px",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        borderTop: "1px solid var(--border-color)",
+                        fontSize: 13,
+                      }}
+                    >
+                      <span>
+                        <span style={{ color: "#94a3b8", marginRight: 8 }}>
+                          #{i + 1}
+                        </span>
+                        <strong>{p.nomProduit}</strong>
+                        {p.tailleProduit && (
+                          <span
+                            style={{
+                              color: "var(--secondary-color)",
+                              marginLeft: 6,
+                            }}
+                          >
+                            · {p.tailleProduit}
+                          </span>
+                        )}
+                      </span>
+                      <span
+                        style={{
+                          color: "var(--success-color)",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {fmtAR(p.prixVente)}
+                      </span>
+                    </div>
+                  ))}
+
+                  {vente.fraisLivraison > 0 && (
+                    <div
+                      style={{
+                        padding: "6px 14px",
+                        background: "#f8fafc",
+                        borderTop: "1px solid var(--border-color)",
+                        fontSize: 12,
+                        color: "var(--secondary-color)",
+                        display: "flex",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <span>Frais livraison</span>
+                      <span>{fmtAR(vente.fraisLivraison)}</span>
+                    </div>
                   )}
+                  {vente.commentaires && (
+                    <div
+                      style={{
+                        padding: "5px 14px",
+                        background: "#fffbeb",
+                        borderTop: "1px solid var(--border-color)",
+                        fontSize: 12,
+                        color: "#92400e",
+                      }}
+                    >
+                      💬 {vente.commentaires}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+
+            {/* Bilan */}
+            {data?.ventes?.length > 0 && (
+              <div
+                style={{
+                  background: "var(--light-color)",
+                  borderRadius: 8,
+                  padding: "12px 14px",
+                  borderTop: "2px solid var(--border-color)",
+                  display: "flex",
+                  gap: 20,
+                  justifyContent: "flex-end",
+                  flexWrap: "wrap",
+                  fontSize: 13,
+                  fontWeight: 700,
+                }}
+              >
+                <span>
+                  CA actif :{" "}
+                  <span style={{ color: "var(--success-color)" }}>
+                    {fmtAR(caActif)}
+                  </span>
                 </span>
-              </span>
-              <span>
-                Total expédition :{" "}
-                <span style={{ color: "var(--primary-color)" }}>
-                  {fmtAR(data.expedition.totalVentes)}
-                </span>
-              </span>
-            </div>
-          )}
+                {data.expedition.totalFrais > 0 && (
+                  <>
+                    <span>
+                      Frais :{" "}
+                      <span style={{ color: "var(--danger-color)" }}>
+                        {fmtAR(data.expedition.totalFrais)}
+                      </span>
+                    </span>
+                    <span>
+                      Bénéfice net :{" "}
+                      <span
+                        style={{
+                          color:
+                            caActif - data.expedition.totalFrais >= 0
+                              ? "var(--success-color)"
+                              : "var(--danger-color)",
+                        }}
+                      >
+                        {fmtAR(caActif - data.expedition.totalFrais)}
+                      </span>
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>,
+
+      {/* Modal modifier une vente (z-index supérieur) */}
+      {editingVente && (
+        <EditVenteExpeditionModal
+          vente={editingVente}
+          livreurs={livreurs}
+          onClose={(did) => {
+            setEditingVente(null);
+            if (did) loadDetail();
+          }}
+        />
+      )}
+    </>,
     document.body,
   );
 };
@@ -1061,8 +1629,6 @@ const Expeditions = () => {
   const [addingTo, setAddingTo] = useState(null);
   const [ventesModal, setVentesModal] = useState(null);
   const [expanded, setExpanded] = useState(new Set());
-  const [expandedVentes, setExpandedVentes] = useState(new Set());
-  const [ventesMap, setVentesMap] = useState({});
   const [filterStatut, setFilterStatut] = useState("");
 
   useEffect(() => {
@@ -1086,52 +1652,17 @@ const Expeditions = () => {
       return n;
     });
 
-  // Charger les ventes d'une expédition au clic sur "Ventes"
-  const toggleVentesExpedition = async (expId) => {
-    setExpandedVentes((p) => {
-      const n = new Set(p);
-      if (n.has(expId)) {
-        n.delete(expId);
-        return n;
-      }
-      n.add(expId);
-      return n;
-    });
-    if (!ventesMap[expId]) {
-      try {
-        const res = await api.get(`/expeditions/${expId}`);
-        setVentesMap((p) => ({ ...p, [expId]: res.data.data.ventes }));
-      } catch {
-        toast.error("Erreur chargement ventes");
-      }
-    }
-  };
-
-  const handleAnnulerVenteExpedition = async (expId, venteId, nomClient) => {
-    const raison = prompt(`Annuler la vente de ${nomClient} ? Raison :`);
-    if (!raison) return;
-    try {
-      const res = await api.put(
-        `/expeditions/${expId}/annuler-vente/${venteId}`,
-        { raisonAnnulation: raison },
-      );
-      if (res.data.success) {
-        toast.success("Vente annulée et retirée de l'expédition ✅");
-        setVentesMap((p) => ({ ...p, [expId]: res.data.data.ventes }));
-        fetchExpeditions({}, true);
-      }
-    } catch (e) {
-      toast.error(e.response?.data?.message || "Erreur");
-    }
-  };
-
   const filtered = expeditions.filter(
     (e) => !filterStatut || e.statut === filterStatut,
   );
+
   const totalFraisReel = filtered
     .filter((e) => e.statut !== "en_preparation" && e.statut !== "annulée")
     .reduce((s, e) => s + (e.totalFrais || 0), 0);
   const totalCAExpédie = filtered.reduce((s, e) => s + (e.totalVentes || 0), 0);
+  const totalBeneficeNet = filtered
+    .filter((e) => e.statut !== "en_preparation" && e.statut !== "annulée")
+    .reduce((s, e) => s + (e.totalVentes - e.totalFrais), 0);
   const totalProduits = filtered.reduce(
     (s, e) => s + (e.produits?.length || 0),
     0,
@@ -1165,10 +1696,10 @@ const Expeditions = () => {
         </button>
       </div>
 
-      {/* Stats */}
+      {/* Stats globales */}
       <div
         className="stats-grid"
-        style={{ gridTemplateColumns: "repeat(3, 1fr)" }}
+        style={{ gridTemplateColumns: "repeat(4, 1fr)" }}
       >
         <div className="stat-card">
           <div className="stat-icon blue" style={{ fontSize: 20 }}>
@@ -1189,12 +1720,40 @@ const Expeditions = () => {
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon red" style={{ fontSize: 16 }}>
-            💸
+          <div className="stat-icon orange" style={{ fontSize: 16 }}>
+            💰
           </div>
           <div className="stat-info">
-            <h3 style={{ fontSize: 18 }}>{fmtAR(totalFraisReel)}</h3>
-            <p>Frais réels (expédiées)</p>
+            <h3 style={{ fontSize: 16 }}>{fmtAR(totalCAExpédie)}</h3>
+            <p>CA total</p>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div
+            className="stat-icon"
+            style={{
+              background:
+                totalBeneficeNet >= 0
+                  ? "var(--success-color)"
+                  : "var(--danger-color)",
+              fontSize: 16,
+            }}
+          >
+            📈
+          </div>
+          <div className="stat-info">
+            <h3
+              style={{
+                fontSize: 16,
+                color:
+                  totalBeneficeNet >= 0
+                    ? "var(--success-color)"
+                    : "var(--danger-color)",
+              }}
+            >
+              {fmtAR(totalBeneficeNet)}
+            </h3>
+            <p>Bénéfice net (expédiées)</p>
           </div>
         </div>
       </div>
@@ -1224,6 +1783,7 @@ const Expeditions = () => {
           const cfg = statutConfig[exp.statut] || {};
           const isExpanded = expanded.has(exp._id);
           const isEnPrepa = exp.statut === "en_preparation";
+          const beneficeNet = (exp.totalVentes || 0) - (exp.totalFrais || 0);
 
           return (
             <div
@@ -1298,11 +1858,11 @@ const Expeditions = () => {
                     </div>
                   </div>
 
-                  {/* Montants — masqués si en préparation */}
+                  {/* Montants */}
                   <div
                     style={{
                       display: "flex",
-                      gap: 16,
+                      gap: 14,
                       fontSize: 13,
                       flexWrap: "wrap",
                       alignItems: "center",
@@ -1368,24 +1928,35 @@ const Expeditions = () => {
                             {fmtAR(exp.totalFrais)}
                           </strong>
                         </div>
-                        <div style={{ textAlign: "center" }}>
+                        {/* Bénéfice net mis en avant */}
+                        <div
+                          style={{
+                            textAlign: "center",
+                            background:
+                              beneficeNet >= 0 ? "#f0fdf4" : "#fff1f2",
+                            border: `1px solid ${beneficeNet >= 0 ? "#bbf7d0" : "#fecdd3"}`,
+                            borderRadius: 8,
+                            padding: "6px 12px",
+                          }}
+                        >
                           <div
                             style={{
                               color: "var(--secondary-color)",
                               fontSize: 11,
                             }}
                           >
-                            Net
+                            Bénéfice net
                           </div>
                           <strong
                             style={{
                               color:
-                                exp.totalVentes - exp.totalFrais >= 0
+                                beneficeNet >= 0
                                   ? "var(--success-color)"
                                   : "var(--danger-color)",
+                              fontSize: 15,
                             }}
                           >
-                            {fmtAR(exp.totalVentes - exp.totalFrais)}
+                            {fmtAR(beneficeNet)}
                           </strong>
                         </div>
                       </>
@@ -1406,7 +1977,14 @@ const Expeditions = () => {
                   </div>
 
                   {/* Actions */}
-                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 6,
+                      flexShrink: 0,
+                      flexWrap: "wrap",
+                    }}
+                  >
                     {exp.produits?.length > 0 && (
                       <button
                         onClick={() => toggleExpand(exp._id)}
@@ -1419,7 +1997,7 @@ const Expeditions = () => {
                       onClick={() => setVentesModal(exp)}
                       className="btn btn-sm btn-secondary"
                       style={{ color: "#1d4ed8", fontWeight: 600 }}
-                      title="Voir les ventes rattachées"
+                      title="Gérer les ventes"
                     >
                       👥 Ventes
                     </button>
@@ -1437,7 +2015,7 @@ const Expeditions = () => {
                         onClick={() => setExpedierModal(exp)}
                         className="btn btn-sm btn-primary"
                         style={{ background: "#7c3aed", gap: 6 }}
-                        title="Marquer comme expédiée"
+                        title="Expédier"
                       >
                         <FaRocket /> Expédier
                       </button>
@@ -1463,7 +2041,7 @@ const Expeditions = () => {
                 </div>
               </div>
 
-              {/* Détail produits */}
+              {/* Détail produits dépliable */}
               {isExpanded && exp.produits && exp.produits.length > 0 && (
                 <div
                   style={{
@@ -1528,7 +2106,7 @@ const Expeditions = () => {
                       padding: "10px 16px",
                       display: "flex",
                       justifyContent: "flex-end",
-                      gap: 24,
+                      gap: 20,
                       fontSize: 13,
                       borderTop: "2px solid var(--border-color)",
                       fontWeight: 700,
@@ -1541,227 +2119,29 @@ const Expeditions = () => {
                       </span>
                     </span>
                     {!isEnPrepa && (
-                      <span>
-                        Frais :{" "}
-                        <span style={{ color: "var(--danger-color)" }}>
-                          {fmtAR(exp.totalFrais)}
+                      <>
+                        <span>
+                          Frais :{" "}
+                          <span style={{ color: "var(--danger-color)" }}>
+                            {fmtAR(exp.totalFrais)}
+                          </span>
                         </span>
-                      </span>
-                    )}
-                    {!isEnPrepa && (
-                      <span>
-                        Net :{" "}
-                        <span
-                          style={{
-                            color:
-                              exp.totalVentes - exp.totalFrais >= 0
-                                ? "var(--success-color)"
-                                : "var(--danger-color)",
-                          }}
-                        >
-                          {fmtAR(exp.totalVentes - exp.totalFrais)}
-                        </span>
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Liste des ventes rattachées */}
-              {expandedVentes.has(exp._id) && (
-                <div
-                  style={{
-                    borderTop: "2px solid #bfdbfe",
-                    background: "#f0f9ff",
-                  }}
-                >
-                  <div
-                    style={{
-                      padding: "10px 16px",
-                      fontWeight: 700,
-                      fontSize: 13,
-                      color: "#1d4ed8",
-                      borderBottom: "1px solid #bfdbfe",
-                    }}
-                  >
-                    📋 Ventes rattachées à cette expédition
-                  </div>
-                  {!ventesMap[exp._id] ? (
-                    <div
-                      style={{
-                        padding: 20,
-                        textAlign: "center",
-                        color: "var(--secondary-color)",
-                      }}
-                    >
-                      <div
-                        className="spinner"
-                        style={{ margin: "0 auto" }}
-                      ></div>
-                    </div>
-                  ) : ventesMap[exp._id].length === 0 ? (
-                    <p
-                      style={{
-                        padding: 16,
-                        color: "var(--secondary-color)",
-                        fontSize: 13,
-                      }}
-                    >
-                      Aucune vente rattachée
-                    </p>
-                  ) : (
-                    ventesMap[exp._id].map((v) => (
-                      <div
-                        key={v._id}
-                        style={{
-                          padding: "12px 16px",
-                          borderBottom: "1px solid #bfdbfe",
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "flex-start",
-                          flexWrap: "wrap",
-                          gap: 10,
-                        }}
-                      >
-                        <div style={{ flex: 1 }}>
-                          {/* Client */}
-                          <div
+                        <span>
+                          Bénéfice net :{" "}
+                          <span
                             style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 8,
-                              marginBottom: 4,
+                              color:
+                                beneficeNet >= 0
+                                  ? "var(--success-color)"
+                                  : "var(--danger-color)",
                             }}
                           >
-                            <strong style={{ fontSize: 14 }}>
-                              {v.nomClient}
-                            </strong>
-                            <span
-                              style={{
-                                fontSize: 12,
-                                color: "var(--secondary-color)",
-                              }}
-                            >
-                              {v.telephoneClient}
-                            </span>
-                            <span
-                              style={{
-                                padding: "1px 8px",
-                                borderRadius: 12,
-                                fontSize: 11,
-                                fontWeight: 600,
-                                background:
-                                  v.statutLivraison === "annulé"
-                                    ? "#fee2e2"
-                                    : v.statutLivraison === "livré"
-                                      ? "#d1fae5"
-                                      : "#fef3c7",
-                                color:
-                                  v.statutLivraison === "annulé"
-                                    ? "#991b1b"
-                                    : v.statutLivraison === "livré"
-                                      ? "#065f46"
-                                      : "#92400e",
-                              }}
-                            >
-                              {v.statutLivraison}
-                            </span>
-                          </div>
-                          {/* Produits */}
-                          <div
-                            style={{
-                              fontSize: 12,
-                              color: "var(--secondary-color)",
-                              marginBottom: 2,
-                            }}
-                          >
-                            {v.produits && v.produits.length > 1 ? (
-                              v.produits.map((p, i) => (
-                                <span key={p._id} style={{ marginRight: 12 }}>
-                                  {i + 1}. {p.nomProduit}
-                                  {p.tailleProduit
-                                    ? ` (${p.tailleProduit})`
-                                    : ""}{" "}
-                                  — {fmtAR(p.prixVente)}
-                                </span>
-                              ))
-                            ) : (
-                              <span>
-                                {v.nomProduit}
-                                {v.tailleProduit ? ` (${v.tailleProduit})` : ""}
-                              </span>
-                            )}
-                          </div>
-                          <div style={{ fontSize: 12 }}>
-                            <span style={{ color: "var(--secondary-color)" }}>
-                              Lieu : {v.lieuLivraison}
-                            </span>
-                            {v.livreur && (
-                              <span
-                                style={{
-                                  color: "var(--secondary-color)",
-                                  marginLeft: 12,
-                                }}
-                              >
-                                🚚 {v.livreur.nom}
-                              </span>
-                            )}
-                            <span
-                              style={{
-                                marginLeft: 12,
-                                fontWeight: 700,
-                                color: "var(--success-color)",
-                              }}
-                            >
-                              {fmtAR(v.prixVente)}
-                            </span>
-                          </div>
-                        </div>
-                        {/* Actions vente */}
-                        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                          {v.statutLivraison !== "annulé" && (
-                            <button
-                              onClick={() =>
-                                handleAnnulerVenteExpedition(
-                                  exp._id,
-                                  v._id,
-                                  v.nomClient,
-                                )
-                              }
-                              className="btn btn-sm btn-danger"
-                              title="Annuler cette vente et la retirer de l'expédition"
-                              style={{ fontSize: 12 }}
-                            >
-                              <FaBan /> Annuler
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                  {ventesMap[exp._id] && ventesMap[exp._id].length > 0 && (
-                    <div
-                      style={{
-                        padding: "8px 16px",
-                        fontSize: 13,
-                        color: "#1d4ed8",
-                        fontWeight: 600,
-                        borderTop: "1px solid #bfdbfe",
-                      }}
-                    >
-                      {
-                        ventesMap[exp._id].filter(
-                          (v) => v.statutLivraison !== "annulé",
-                        ).length
-                      }{" "}
-                      vente(s) active(s) · Total CA :{" "}
-                      {fmtAR(
-                        ventesMap[exp._id]
-                          .filter((v) => v.statutLivraison !== "annulé")
-                          .reduce((s, v) => s + v.prixVente, 0),
-                      )}
-                    </div>
-                  )}
+                            {fmtAR(beneficeNet)}
+                          </span>
+                        </span>
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -1769,6 +2149,7 @@ const Expeditions = () => {
         })
       )}
 
+      {/* Modals */}
       {showModal && (
         <ExpeditionModal
           expedition={editing}

@@ -47,8 +47,6 @@ export const getExpedition = async (req, res, next) => {
         .json({ success: false, message: "Expédition non trouvée" });
     }
 
-    // Extraire les IDs de ventes uniques depuis les produits de l'expédition
-    // (plus fiable que vente.expedition qui peut ne pas être mis à jour)
     const venteIds = [
       ...new Set(
         expedition.produits
@@ -74,7 +72,7 @@ export const getExpedition = async (req, res, next) => {
 export const createExpedition = async (req, res, next) => {
   try {
     const expedition = new Expedition(req.body);
-    await expedition.save(); // pre-save recalcule tout
+    await expedition.save();
     res.status(201).json({ success: true, data: expedition });
   } catch (error) {
     next(error);
@@ -83,7 +81,6 @@ export const createExpedition = async (req, res, next) => {
 
 // @desc    Mettre à jour une expédition
 // @route   PUT /api/expeditions/:id
-// FIX : utiliser .save() pour déclencher le recalcul complet via pre-save
 export const updateExpedition = async (req, res, next) => {
   try {
     const expedition = await Expedition.findById(req.params.id);
@@ -93,7 +90,6 @@ export const updateExpedition = async (req, res, next) => {
         .json({ success: false, message: "Expédition non trouvée" });
     }
 
-    // Appliquer les champs modifiables
     const fields = [
       "nom",
       "destination",
@@ -109,7 +105,7 @@ export const updateExpedition = async (req, res, next) => {
       if (req.body[f] !== undefined) expedition[f] = req.body[f];
     });
 
-    await expedition.save(); // recalcule totalVentes, salaireCommissionnaire, totalFrais
+    await expedition.save();
 
     res.status(200).json({ success: true, data: expedition });
   } catch (error) {
@@ -153,9 +149,8 @@ export const ajouterProduitsExpedition = async (req, res, next) => {
     }
 
     expedition.produits.push(...produits);
-    await expedition.save(); // recalcule totalVentes + totalFrais
+    await expedition.save();
 
-    // Mettre à jour le champ expedition sur les ventes concernées
     const venteIds = [
       ...new Set(produits.filter((p) => p.vente).map((p) => p.vente)),
     ];
@@ -193,7 +188,7 @@ export const retirerProduitExpedition = async (req, res, next) => {
     }
 
     expedition.produits.splice(idx, 1);
-    await expedition.save(); // recalcule après retrait
+    await expedition.save();
 
     res.status(200).json({ success: true, data: expedition });
   } catch (error) {
@@ -321,7 +316,6 @@ export const annulerVenteExpedition = async (req, res, next) => {
         .json({ success: false, message: "Cette vente est déjà annulée" });
     }
 
-    // Remettre les produits en stock
     for (const entry of vente.produits || []) {
       if (entry.produit) {
         await Vente.db
@@ -330,7 +324,6 @@ export const annulerVenteExpedition = async (req, res, next) => {
       }
     }
 
-    // Mettre à jour la balle
     if (vente.balle) {
       const balle = await Vente.db.model("Balle").findById(vente.balle);
       if (balle) {
@@ -341,20 +334,64 @@ export const annulerVenteExpedition = async (req, res, next) => {
       }
     }
 
-    // Annuler la vente
     vente.statutLivraison = "annulé";
     vente.raisonAnnulation =
       req.body.raisonAnnulation || "Annulée depuis l'expédition";
     vente.expedition = null;
     await vente.save();
 
+    expedition.produits = expedition.produits.filter(
+      (p) => p.vente?.toString() !== vente._id.toString(),
+    );
+    await expedition.save();
+
+    const venteIds = [
+      ...new Set(
+        expedition.produits
+          .filter((p) => p.vente)
+          .map((p) => p.vente.toString()),
+      ),
+    ];
+    const ventes = await Vente.find({ _id: { $in: venteIds } })
+      .populate("balle", "nom numero")
+      .populate("produits.produit")
+      .populate("livreur", "nom telephone")
+      .sort({ dateVente: -1 });
+
+    res.status(200).json({ success: true, data: { expedition, ventes } });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Détacher une vente d'une expédition (sans l'annuler)
+// @route   PUT /api/expeditions/:id/detacher-vente/:venteId
+export const detacherVenteExpedition = async (req, res, next) => {
+  try {
+    const expedition = await Expedition.findById(req.params.id);
+    if (!expedition) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Expédition non trouvée" });
+    }
+
+    const vente = await Vente.findById(req.params.venteId);
+    if (!vente) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Vente non trouvée" });
+    }
+
     // Retirer les produits de cette vente de l'expédition
     expedition.produits = expedition.produits.filter(
       (p) => p.vente?.toString() !== vente._id.toString(),
     );
-    await expedition.save(); // recalcule totalVentes + totalFrais
+    await expedition.save();
 
-    // Retourner l'expédition mise à jour avec ses ventes
+    // Détacher la vente sans l'annuler
+    vente.expedition = null;
+    await vente.save();
+
     const venteIds = [
       ...new Set(
         expedition.produits
@@ -385,12 +422,10 @@ export const expedierExpedition = async (req, res, next) => {
         .json({ success: false, message: "Expédition non trouvée" });
     }
     if (expedition.statut !== "en_preparation") {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Expédition déjà expédiée ou annulée",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Expédition déjà expédiée ou annulée",
+      });
     }
 
     expedition.statut = "expédiée";
@@ -411,7 +446,7 @@ export const expedierExpedition = async (req, res, next) => {
         req.body.salaireCommissionnaire,
       );
 
-    await expedition.save(); // pre-save recalcule tout (totalVentes, salaireCommissionnaire si %, totalFrais)
+    await expedition.save();
 
     res.status(200).json({ success: true, data: expedition });
   } catch (error) {
@@ -431,12 +466,10 @@ export const rattacherVente = async (req, res, next) => {
         .json({ success: false, message: "Expédition non trouvée" });
     }
     if (expedition.statut !== "en_preparation") {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Impossible d'ajouter à une expédition déjà expédiée",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Impossible d'ajouter à une expédition déjà expédiée",
+      });
     }
 
     const vente = await Vente.findById(venteId);
@@ -464,9 +497,8 @@ export const rattacherVente = async (req, res, next) => {
     }));
 
     expedition.produits.push(...produitsAjoutes);
-    await expedition.save(); // recalcule tout
+    await expedition.save();
 
-    // Marquer la vente comme rattachée
     vente.expedition = expedition._id;
     await vente.save();
 

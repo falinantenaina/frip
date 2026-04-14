@@ -4,6 +4,7 @@ import {
   annulerVenteExpedition,
   createExpedition,
   deleteExpedition,
+  detacherVenteExpedition,
   expedierExpedition,
   getExpedition,
   getExpeditions,
@@ -40,6 +41,11 @@ router.put(
   "/:id/annuler-vente/:venteId",
   authorize("admin"),
   annulerVenteExpedition,
+);
+router.put(
+  "/:id/detacher-vente/:venteId",
+  authorize("admin"),
+  detacherVenteExpedition,
 );
 router.post("/:id/produits", authorize("admin"), ajouterProduitsExpedition);
 router.delete(
