@@ -3,7 +3,6 @@ import { fr } from "date-fns/locale";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  FaBan,
   FaBoxOpen,
   FaCalendarAlt,
   FaEdit,
@@ -12,8 +11,8 @@ import {
   FaSave,
   FaTimes,
   FaTrash,
-  FaUnlink,
 } from "react-icons/fa";
+import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import useAppStore from "../stores/appStore";
 import api from "../utils/api";
@@ -105,7 +104,6 @@ const ExpeditionModal = ({ expedition, onClose }) => {
         </div>
         <div className="modal-body">
           <form onSubmit={handleSubmit}>
-            {/* Infos de base */}
             <div className="form-group">
               <label className="form-label">
                 Nom de l'expédition *
@@ -169,7 +167,6 @@ const ExpeditionModal = ({ expedition, onClose }) => {
               </div>
             )}
 
-            {/* Frais & Commission — toujours visibles en édition */}
             {isEdit && (
               <div
                 style={{
@@ -928,706 +925,15 @@ const AjouterProduitsModal = ({ expedition, onClose }) => {
   );
 };
 
-// ── Modal Modifier une vente depuis l'expédition ─────────────────────────────
-const EditVenteExpeditionModal = ({ vente, livreurs, onClose }) => {
-  const [form, setForm] = useState({
-    statutLivraison: vente.statutLivraison || "en_attente",
-    livreur: vente.livreur?._id || vente.livreur || "",
-    lieuLivraison: vente.lieuLivraison || "",
-    fraisLivraison: vente.fraisLivraison?.toString() || "0",
-    commentaires: vente.commentaires || "",
-  });
-  const [loading, setLoading] = useState(false);
-  const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await api.put(`/ventes/${vente._id}`, {
-        ...form,
-        fraisLivraison: parseFloat(form.fraisLivraison) || 0,
-        livreur: form.livreur || null,
-      });
-      toast.success("Vente modifiée ✅");
-      onClose(true);
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Erreur");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return createPortal(
-    <div
-      className="modal-overlay"
-      onClick={() => onClose(false)}
-      style={{ zIndex: 10000 }}
-    >
-      <div
-        className="modal"
-        onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: 480, width: "calc(100% - 24px)" }}
-      >
-        <div className="modal-header">
-          <div>
-            <h3 className="modal-title">✏️ Modifier — {vente.nomClient}</h3>
-            <p
-              style={{
-                fontSize: 13,
-                color: "var(--secondary-color)",
-                marginTop: 3,
-              }}
-            >
-              {vente.produits?.length > 1
-                ? `${vente.produits.length} produits`
-                : vente.nomProduit}{" "}
-              · {fmtAR(vente.prixVente)}
-            </p>
-          </div>
-          <button className="modal-close" onClick={() => onClose(false)}>
-            <FaTimes />
-          </button>
-        </div>
-        <div className="modal-body">
-          <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label className="form-label">Statut de livraison</label>
-              <select
-                className="form-select"
-                value={form.statutLivraison}
-                onChange={(e) => set("statutLivraison", e.target.value)}
-              >
-                <option value="en_attente">⏳ En attente</option>
-                <option value="en_cours">🚚 En cours</option>
-                <option value="livré">✅ Livré</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Livreur</label>
-              <select
-                className="form-select"
-                value={form.livreur}
-                onChange={(e) => set("livreur", e.target.value)}
-              >
-                <option value="">Aucun livreur</option>
-                {livreurs.map((l) => (
-                  <option key={l._id} value={l._id}>
-                    {l.nom}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">Lieu de livraison</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Adresse..."
-                  value={form.lieuLivraison}
-                  onChange={(e) => set("lieuLivraison", e.target.value)}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Frais livraison (AR)</label>
-                <input
-                  type="number"
-                  className="form-input"
-                  min="0"
-                  value={form.fraisLivraison}
-                  onChange={(e) => set("fraisLivraison", e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Commentaires</label>
-              <textarea
-                className="form-textarea"
-                rows={2}
-                placeholder="Notes..."
-                value={form.commentaires}
-                onChange={(e) => set("commentaires", e.target.value)}
-              />
-            </div>
-            <div className="modal-footer">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => onClose(false)}
-              >
-                Annuler
-              </button>
-              <button
-                type="submit"
-                className="btn btn-primary"
-                disabled={loading}
-              >
-                <FaSave /> {loading ? "Enregistrement..." : "Enregistrer"}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
-};
-
-// ── Modal Détail ventes d'une expédition ─────────────────────────────────────
-const VentesExpeditionModal = ({ expedition, onClose }) => {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [livreurs, setLivreurs] = useState([]);
-  const [ventesDispos, setVentesDispos] = useState([]);
-  const [editingVente, setEditingVente] = useState(null);
-  const [showAddSection, setShowAddSection] = useState(false);
-  const [selectedVenteId, setSelectedVenteId] = useState("");
-  const [actionLoading, setActionLoading] = useState(false);
-
-  const isEnPrepa = expedition.statut === "en_preparation";
-
-  const loadDetail = async () => {
-    setLoading(true);
-    try {
-      const r = await api.get(`/expeditions/${expedition._id}`);
-      setData(r.data.data);
-    } catch {
-      toast.error("Erreur de chargement");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadVentesDispos = async () => {
-    try {
-      const r = await api.get(
-        `/expeditions/ventes-disponibles?destination=${expedition.destination}`,
-      );
-      setVentesDispos(r.data.data);
-    } catch {}
-  };
-
-  useEffect(() => {
-    loadDetail();
-    api
-      .get("/livreurs")
-      .then((r) => setLivreurs(r.data.data))
-      .catch(() => {});
-    loadVentesDispos();
-  }, [expedition._id]);
-
-  const handleRattacher = async () => {
-    if (!selectedVenteId) {
-      toast.error("Sélectionner une vente");
-      return;
-    }
-    setActionLoading(true);
-    try {
-      await api.put(`/expeditions/${expedition._id}/rattacher-vente`, {
-        venteId: selectedVenteId,
-      });
-      toast.success("Vente rattachée ✅");
-      setSelectedVenteId("");
-      setShowAddSection(false);
-      loadDetail();
-      loadVentesDispos();
-    } catch (e) {
-      toast.error(e.response?.data?.message || "Erreur");
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleAnnulerVente = async (venteId, nomClient) => {
-    const raison = window.prompt(
-      `Annuler la commande de ${nomClient} ?\nRaison :`,
-    );
-    if (raison === null) return;
-    try {
-      await api.put(`/expeditions/${expedition._id}/annuler-vente/${venteId}`, {
-        raisonAnnulation: raison || "Annulée depuis expédition",
-      });
-      toast.success(`Commande de ${nomClient} annulée`);
-      loadDetail();
-      loadVentesDispos();
-    } catch (e) {
-      toast.error(e.response?.data?.message || "Erreur");
-    }
-  };
-
-  const handleDetacher = async (venteId, nomClient) => {
-    if (
-      !window.confirm(
-        `Retirer la vente de ${nomClient} de cette expédition ?\nLa vente sera conservée dans le système.`,
-      )
-    )
-      return;
-    try {
-      await api.put(`/expeditions/${expedition._id}/detacher-vente/${venteId}`);
-      toast.success(`Vente de ${nomClient} retirée de l'expédition`);
-      loadDetail();
-      loadVentesDispos();
-    } catch (e) {
-      toast.error(e.response?.data?.message || "Erreur");
-    }
-  };
-
-  const handleDeleteVente = async (venteId, nomClient) => {
-    if (
-      !window.confirm(
-        `Supprimer définitivement la vente de ${nomClient} ?\nCette action est irréversible.`,
-      )
-    )
-      return;
-    try {
-      await api.delete(`/ventes/${venteId}`);
-      toast.success(`Vente de ${nomClient} supprimée`);
-      loadDetail();
-    } catch (e) {
-      toast.error(e.response?.data?.message || "Erreur");
-    }
-  };
-
-  const getStatutClass = (s) =>
-    ({
-      en_attente: "en_attente",
-      en_cours: "en_cours",
-      livré: "livre",
-      annulé: "annule",
-    })[s] || "en_attente";
-  const getStatutLabel = (s) =>
-    ({
-      en_attente: "En attente",
-      en_cours: "En cours",
-      livré: "Livré",
-      annulé: "Annulé",
-    })[s] || s;
-
-  const activeVentes =
-    data?.ventes?.filter((v) => v.statutLivraison !== "annulé") || [];
-  const caActif = activeVentes.reduce((s, v) => s + v.prixVente, 0);
-
-  return createPortal(
-    <>
-      <div
-        className="modal-overlay"
-        onClick={() => onClose()}
-        style={{ zIndex: 9999 }}
-      >
-        <div
-          className="modal"
-          onClick={(e) => e.stopPropagation()}
-          style={{
-            maxWidth: 820,
-            width: "calc(100% - 24px)",
-            maxHeight: "90vh",
-            overflowY: "auto",
-          }}
-        >
-          <div className="modal-header">
-            <div>
-              <h3 className="modal-title">👥 Ventes — {expedition.nom}</h3>
-              <p
-                style={{
-                  fontSize: 13,
-                  color: "var(--secondary-color)",
-                  marginTop: 4,
-                }}
-              >
-                {expedition.destination} · {fmtDate(expedition.dateExpedition)}
-                {data && (
-                  <span> · {activeVentes.length} vente(s) active(s)</span>
-                )}
-              </p>
-            </div>
-            <button className="modal-close" onClick={() => onClose()}>
-              <FaTimes />
-            </button>
-          </div>
-          <div className="modal-body">
-            {/* ── Section rattacher une vente (seulement en préparation) ── */}
-            {isEnPrepa && (
-              <div style={{ marginBottom: 16 }}>
-                {!showAddSection ? (
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={() => setShowAddSection(true)}
-                  >
-                    <FaPlus /> Rattacher une vente
-                  </button>
-                ) : (
-                  <div
-                    style={{
-                      background: "#f0fdf4",
-                      border: "1px solid #bbf7d0",
-                      borderRadius: 10,
-                      padding: 14,
-                    }}
-                  >
-                    <p
-                      style={{
-                        fontWeight: 600,
-                        fontSize: 13,
-                        marginBottom: 10,
-                        color: "#065f46",
-                      }}
-                    >
-                      ➕ Rattacher une vente disponible —{" "}
-                      {expedition.destination}
-                    </p>
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: 10,
-                        alignItems: "flex-end",
-                        flexWrap: "wrap",
-                      }}
-                    >
-                      <div style={{ flex: 1, minWidth: 200 }}>
-                        <select
-                          className="form-select"
-                          value={selectedVenteId}
-                          onChange={(e) => setSelectedVenteId(e.target.value)}
-                        >
-                          <option value="">Sélectionner une vente...</option>
-                          {ventesDispos.map((v) => (
-                            <option key={v._id} value={v._id}>
-                              {v.nomClient} —{" "}
-                              {v.produits?.length > 1
-                                ? `${v.produits.length} produits`
-                                : v.nomProduit}{" "}
-                              — {fmtAR(v.prixVente)}
-                            </option>
-                          ))}
-                        </select>
-                        {ventesDispos.length === 0 && (
-                          <small
-                            style={{
-                              color: "var(--secondary-color)",
-                              marginTop: 4,
-                              display: "block",
-                            }}
-                          >
-                            Aucune vente disponible pour{" "}
-                            {expedition.destination}
-                          </small>
-                        )}
-                      </div>
-                      <button
-                        className="btn btn-success btn-sm"
-                        onClick={handleRattacher}
-                        disabled={actionLoading || !selectedVenteId}
-                      >
-                        {actionLoading ? "..." : "✔ Rattacher"}
-                      </button>
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => {
-                          setShowAddSection(false);
-                          setSelectedVenteId("");
-                        }}
-                      >
-                        Fermer
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ── Liste des ventes ── */}
-            {loading ? (
-              <div className="loading">
-                <div className="spinner"></div>
-              </div>
-            ) : !data?.ventes?.length ? (
-              <p className="no-data">
-                Aucune vente rattachée à cette expédition
-              </p>
-            ) : (
-              data.ventes.map((vente) => (
-                <div
-                  key={vente._id}
-                  style={{
-                    border: "1px solid var(--border-color)",
-                    borderRadius: 10,
-                    marginBottom: 12,
-                    overflow: "hidden",
-                    opacity: vente.statutLivraison === "annulé" ? 0.55 : 1,
-                  }}
-                >
-                  {/* En-tête vente */}
-                  <div
-                    style={{
-                      background: "var(--light-color)",
-                      padding: "10px 14px",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      flexWrap: "wrap",
-                      gap: 8,
-                    }}
-                  >
-                    <div>
-                      <strong style={{ fontSize: 15 }}>
-                        {vente.nomClient}
-                      </strong>
-                      <span
-                        style={{
-                          color: "var(--secondary-color)",
-                          fontSize: 13,
-                          marginLeft: 10,
-                        }}
-                      >
-                        {vente.telephoneClient}
-                      </span>
-                      {vente.lieuLivraison && (
-                        <span
-                          style={{
-                            color: "var(--secondary-color)",
-                            fontSize: 12,
-                            marginLeft: 8,
-                          }}
-                        >
-                          📍 {vente.lieuLivraison}
-                        </span>
-                      )}
-                      {vente.livreur && (
-                        <span
-                          style={{
-                            color: "var(--secondary-color)",
-                            fontSize: 12,
-                            marginLeft: 8,
-                          }}
-                        >
-                          🚚 {vente.livreur.nom}
-                        </span>
-                      )}
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                        flexWrap: "wrap",
-                      }}
-                    >
-                      <strong
-                        style={{ color: "var(--success-color)", fontSize: 15 }}
-                      >
-                        {fmtAR(vente.prixVente)}
-                      </strong>
-                      <span
-                        className={`status-badge ${getStatutClass(vente.statutLivraison)}`}
-                      >
-                        {getStatutLabel(vente.statutLivraison)}
-                      </span>
-                      {vente.statutLivraison !== "annulé" && (
-                        <>
-                          {/* Modifier */}
-                          <button
-                            className="btn btn-sm btn-secondary"
-                            onClick={() => setEditingVente(vente)}
-                            title="Modifier la vente"
-                            style={{ padding: "4px 10px" }}
-                          >
-                            <FaEdit size={11} /> Modifier
-                          </button>
-                          {/* Détacher */}
-                          <button
-                            className="btn btn-sm btn-secondary"
-                            onClick={() =>
-                              handleDetacher(vente._id, vente.nomClient)
-                            }
-                            title="Retirer de l'expédition sans annuler"
-                            style={{ padding: "4px 10px", color: "#92400e" }}
-                          >
-                            <FaUnlink size={11} /> Retirer
-                          </button>
-                          {/* Annuler */}
-                          <button
-                            className="btn btn-sm btn-danger"
-                            onClick={() =>
-                              handleAnnulerVente(vente._id, vente.nomClient)
-                            }
-                            style={{ padding: "4px 10px" }}
-                          >
-                            <FaBan size={11} /> Annuler
-                          </button>
-                        </>
-                      )}
-                      {/* Supprimer définitivement */}
-                      <button
-                        className="btn btn-sm btn-danger"
-                        onClick={() =>
-                          handleDeleteVente(vente._id, vente.nomClient)
-                        }
-                        title="Supprimer définitivement"
-                        style={{ padding: "4px 8px" }}
-                      >
-                        <FaTrash size={11} />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Produits */}
-                  {(vente.produits?.length > 0
-                    ? vente.produits
-                    : [
-                        {
-                          nomProduit: vente.nomProduit,
-                          tailleProduit: vente.tailleProduit,
-                          prixVente: vente.prixVente,
-                        },
-                      ]
-                  ).map((p, i) => (
-                    <div
-                      key={p._id || i}
-                      style={{
-                        padding: "8px 14px",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        borderTop: "1px solid var(--border-color)",
-                        fontSize: 13,
-                      }}
-                    >
-                      <span>
-                        <span style={{ color: "#94a3b8", marginRight: 8 }}>
-                          #{i + 1}
-                        </span>
-                        <strong>{p.nomProduit}</strong>
-                        {p.tailleProduit && (
-                          <span
-                            style={{
-                              color: "var(--secondary-color)",
-                              marginLeft: 6,
-                            }}
-                          >
-                            · {p.tailleProduit}
-                          </span>
-                        )}
-                      </span>
-                      <span
-                        style={{
-                          color: "var(--success-color)",
-                          fontWeight: 600,
-                        }}
-                      >
-                        {fmtAR(p.prixVente)}
-                      </span>
-                    </div>
-                  ))}
-
-                  {vente.fraisLivraison > 0 && (
-                    <div
-                      style={{
-                        padding: "6px 14px",
-                        background: "#f8fafc",
-                        borderTop: "1px solid var(--border-color)",
-                        fontSize: 12,
-                        color: "var(--secondary-color)",
-                        display: "flex",
-                        justifyContent: "space-between",
-                      }}
-                    >
-                      <span>Frais livraison</span>
-                      <span>{fmtAR(vente.fraisLivraison)}</span>
-                    </div>
-                  )}
-                  {vente.commentaires && (
-                    <div
-                      style={{
-                        padding: "5px 14px",
-                        background: "#fffbeb",
-                        borderTop: "1px solid var(--border-color)",
-                        fontSize: 12,
-                        color: "#92400e",
-                      }}
-                    >
-                      💬 {vente.commentaires}
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
-
-            {/* Bilan */}
-            {data?.ventes?.length > 0 && (
-              <div
-                style={{
-                  background: "var(--light-color)",
-                  borderRadius: 8,
-                  padding: "12px 14px",
-                  borderTop: "2px solid var(--border-color)",
-                  display: "flex",
-                  gap: 20,
-                  justifyContent: "flex-end",
-                  flexWrap: "wrap",
-                  fontSize: 13,
-                  fontWeight: 700,
-                }}
-              >
-                <span>
-                  CA actif :{" "}
-                  <span style={{ color: "var(--success-color)" }}>
-                    {fmtAR(caActif)}
-                  </span>
-                </span>
-                {data.expedition.totalFrais > 0 && (
-                  <>
-                    <span>
-                      Frais :{" "}
-                      <span style={{ color: "var(--danger-color)" }}>
-                        {fmtAR(data.expedition.totalFrais)}
-                      </span>
-                    </span>
-                    <span>
-                      Bénéfice net :{" "}
-                      <span
-                        style={{
-                          color:
-                            caActif - data.expedition.totalFrais >= 0
-                              ? "var(--success-color)"
-                              : "var(--danger-color)",
-                        }}
-                      >
-                        {fmtAR(caActif - data.expedition.totalFrais)}
-                      </span>
-                    </span>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Modal modifier une vente (z-index supérieur) */}
-      {editingVente && (
-        <EditVenteExpeditionModal
-          vente={editingVente}
-          livreurs={livreurs}
-          onClose={(did) => {
-            setEditingVente(null);
-            if (did) loadDetail();
-          }}
-        />
-      )}
-    </>,
-    document.body,
-  );
-};
-
 // ── Page principale ──────────────────────────────────────────────────────────
 const Expeditions = () => {
   const { expeditions, fetchExpeditions, deleteExpedition, loading } =
     useAppStore();
+  const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [expedierModal, setExpedierModal] = useState(null);
   const [addingTo, setAddingTo] = useState(null);
-  const [ventesModal, setVentesModal] = useState(null);
   const [expanded, setExpanded] = useState(new Set());
   const [filterStatut, setFilterStatut] = useState("");
 
@@ -1672,7 +978,7 @@ const Expeditions = () => {
     return (
       <div className="main-content">
         <div className="loading">
-          <div className="spinner"></div>
+          <div className="spinner" />
         </div>
       </div>
     );
@@ -1928,7 +1234,6 @@ const Expeditions = () => {
                             {fmtAR(exp.totalFrais)}
                           </strong>
                         </div>
-                        {/* Bénéfice net mis en avant */}
                         <div
                           style={{
                             textAlign: "center",
@@ -1993,14 +1298,17 @@ const Expeditions = () => {
                         {isExpanded ? "▲" : "▼"} ({exp.produits.length})
                       </button>
                     )}
+
+                    {/* ← Navigation vers la page dédiée au lieu du modal */}
                     <button
-                      onClick={() => setVentesModal(exp)}
+                      onClick={() => navigate(`/expeditions/${exp._id}/ventes`)}
                       className="btn btn-sm btn-secondary"
                       style={{ color: "#1d4ed8", fontWeight: 600 }}
                       title="Gérer les ventes"
                     >
                       👥 Ventes
                     </button>
+
                     {isEnPrepa && (
                       <button
                         onClick={() => setAddingTo(exp)}
@@ -2175,15 +1483,6 @@ const Expeditions = () => {
           onClose={(did) => {
             setAddingTo(null);
             refresh(did);
-          }}
-        />
-      )}
-      {ventesModal && (
-        <VentesExpeditionModal
-          expedition={ventesModal}
-          onClose={() => {
-            setVentesModal(null);
-            fetchExpeditions({}, true);
           }}
         />
       )}

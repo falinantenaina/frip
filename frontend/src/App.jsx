@@ -17,6 +17,7 @@ import VenteForm from "./pages/VenteForm";
 import Ventes from "./pages/Ventes";
 import AjouterProduitPage from "./pages/ventes/AjouterProduitPage";
 
+import VentesExpeditionPage from "./pages/expeditions/Ventesexpeditionpage";
 import EditVenteInfoPage from "./pages/ventes/EditVenteInfoPage";
 import ModifierProduitPage from "./pages/ventes/ModifierProduitPage";
 import useAuthStore from "./stores/authStore";
@@ -208,6 +209,15 @@ function App() {
           element={
             <AdminRoute>
               <Expeditions />
+            </AdminRoute>
+          }
+        />
+
+        <Route
+          path="/expeditions/:id/ventes"
+          element={
+            <AdminRoute>
+              <VentesExpeditionPage />
             </AdminRoute>
           }
         />
