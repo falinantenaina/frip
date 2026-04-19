@@ -6,6 +6,8 @@ const produitExpeditionSchema = new mongoose.Schema(
     nomProduit: { type: String, required: true },
     tailleProduit: { type: String },
     prixVente: { type: Number, required: true, min: 0 },
+    prixAchat: { type: Number, default: 0, min: 0 },
+    benefice: { type: Number, default: 0 }, // calculé automatiquement : prixVente - prixAchat
   },
   { _id: true },
 );
@@ -57,6 +59,14 @@ const expeditionSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    totalBeneficeVentes: {
+      type: Number,
+      default: 0,
+    },
+    benefice: {
+      type: Number,
+      default: 0, // totalBeneficeVentes - totalFrais
+    },
     statut: {
       type: String,
       enum: ["en_preparation", "expédiée", "livrée", "annulée"],
@@ -69,9 +79,18 @@ const expeditionSchema = new mongoose.Schema(
 
 // ── Méthode utilitaire de recalcul (réutilisable) ────────────────────────────
 expeditionSchema.methods.recalculer = function () {
-  // 1. Total ventes depuis les produits
+  // 1. Bénéfice par produit + totaux ventes
+  this.produits.forEach((p) => {
+    p.benefice = (p.prixVente || 0) - (p.prixAchat || 0);
+  });
+
   this.totalVentes = this.produits.reduce(
     (sum, p) => sum + (p.prixVente || 0),
+    0,
+  );
+
+  this.totalBeneficeVentes = this.produits.reduce(
+    (sum, p) => sum + (p.benefice || 0),
     0,
   );
 
@@ -83,6 +102,9 @@ expeditionSchema.methods.recalculer = function () {
 
   // 3. Total frais
   this.totalFrais = (this.fraisColis || 0) + (this.salaireCommissionnaire || 0);
+
+  // 4. Bénéfice net de l'expédition
+  this.benefice = this.totalBeneficeVentes - this.totalFrais;
 };
 
 // ── Hook pre('save') — déclenché par .save() ─────────────────────────────────
@@ -111,11 +133,17 @@ expeditionSchema.pre(["findOneAndUpdate", "updateOne"], async function () {
       ? Number(update.pourcentageCommissionnaire)
       : doc.pourcentageCommissionnaire || 0;
 
-  // totalVentes : recalculer depuis les produits (doc existant, les produits ne changent pas via update direct)
+  // totalVentes + totalBeneficeVentes : recalculer depuis les produits
   const produits =
     update.produits !== undefined ? update.produits : doc.produits;
+
   const totalVentes = (produits || []).reduce(
     (sum, p) => sum + (p.prixVente || 0),
+    0,
+  );
+
+  const totalBeneficeVentes = (produits || []).reduce(
+    (sum, p) => sum + ((p.prixVente || 0) - (p.prixAchat || 0)),
     0,
   );
 
@@ -130,8 +158,12 @@ expeditionSchema.pre(["findOneAndUpdate", "updateOne"], async function () {
     update.salaireCommissionnaire = salaire;
   }
 
+  const totalFrais = fraisColis + salaire;
+
   update.totalVentes = totalVentes;
-  update.totalFrais = fraisColis + salaire;
+  update.totalBeneficeVentes = totalBeneficeVentes;
+  update.totalFrais = totalFrais;
+  update.benefice = totalBeneficeVentes - totalFrais;
   this.setUpdate(update);
 });
 

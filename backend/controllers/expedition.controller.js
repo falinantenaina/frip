@@ -219,6 +219,8 @@ export const getExpeditionsStats = async (req, res, next) => {
           totalProduits: { $sum: { $size: "$produits" } },
           totalFraisColis: { $sum: "$fraisColis" },
           totalSalaire: { $sum: "$salaireCommissionnaire" },
+          totalBeneficeVentes: { $sum: "$totalBeneficeVentes" },
+          totalBenefice: { $sum: "$benefice" },
         },
       },
     ]);
@@ -231,6 +233,7 @@ export const getExpeditionsStats = async (req, res, next) => {
           count: { $sum: 1 },
           totalFrais: { $sum: "$totalFrais" },
           totalVentes: { $sum: "$totalVentes" },
+          totalBenefice: { $sum: "$benefice" },
         },
       },
     ]);
@@ -245,6 +248,8 @@ export const getExpeditionsStats = async (req, res, next) => {
           totalProduits: 0,
           totalFraisColis: 0,
           totalSalaire: 0,
+          totalBeneficeVentes: 0,
+          totalBenefice: 0,
         },
         byDestination: statsByDestination,
       },
@@ -487,6 +492,7 @@ export const rattacherVente = async (req, res, next) => {
               nomProduit: vente.nomProduit,
               tailleProduit: vente.tailleProduit,
               prixVente: vente.prixVente,
+              prixAchat: 0,
             },
           ]
     ).map((p) => ({
@@ -494,6 +500,7 @@ export const rattacherVente = async (req, res, next) => {
       nomProduit: p.nomProduit,
       tailleProduit: p.tailleProduit,
       prixVente: p.prixVente,
+      prixAchat: p.prixAchat || 0,
     }));
 
     expedition.produits.push(...produitsAjoutes);
