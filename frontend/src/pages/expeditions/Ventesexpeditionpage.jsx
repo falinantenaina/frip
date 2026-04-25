@@ -1211,6 +1211,7 @@ const VentesExpeditionPage = () => {
       ? exp.benefice
       : beneficeVentesActif - (exp?.totalFrais || 0);
   const isEnPrepa = exp?.statut === "en_preparation";
+  const totalBeneficeVentes = exp?.totalBeneficeVentes;
 
   const expedStatutCfg = EXPEDITION_STATUT[exp?.statut] || {};
 
@@ -1309,7 +1310,7 @@ const VentesExpeditionPage = () => {
             },
             {
               label: "Total Achats",
-              value: fmtAR(caActif - beneficeNet),
+              value: fmtAR(caActif - totalBeneficeVentes),
               color: "#0284c7",
               icon: "📊",
             },
