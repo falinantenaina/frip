@@ -1,17 +1,5 @@
 import mongoose from "mongoose";
 
-const produitExpeditionSchema = new mongoose.Schema(
-  {
-    vente: { type: mongoose.Schema.Types.ObjectId, ref: "Vente" },
-    nomProduit: { type: String, required: true },
-    tailleProduit: { type: String },
-    prixVente: { type: Number, required: true, min: 0 },
-    prixAchat: { type: Number, default: 0, min: 0 },
-    benefice: { type: Number, default: 0 }, // calculé automatiquement : prixVente - prixAchat
-  },
-  { _id: true },
-);
-
 const expeditionSchema = new mongoose.Schema(
   {
     nom: {
@@ -29,7 +17,16 @@ const expeditionSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
-    produits: [produitExpeditionSchema],
+
+    // ── Ventes rattachées (remplace l'ancien tableau produits) ───────────────
+    ventes: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Vente",
+      },
+    ],
+
+    // ── Frais ────────────────────────────────────────────────────────────────
     fraisColis: {
       type: Number,
       default: 0,
@@ -51,6 +48,8 @@ const expeditionSchema = new mongoose.Schema(
       min: 0,
       max: 100,
     },
+
+    // ── Totaux (recalculés à chaque save depuis les ventes) ──────────────────
     totalFrais: {
       type: Number,
       default: 0,
@@ -65,8 +64,9 @@ const expeditionSchema = new mongoose.Schema(
     },
     benefice: {
       type: Number,
-      default: 0, // totalBeneficeVentes - totalFrais
+      default: 0,
     },
+
     statut: {
       type: String,
       enum: ["en_preparation", "expédiée", "livrée", "annulée"],
@@ -77,22 +77,17 @@ const expeditionSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-// ── Méthode utilitaire de recalcul (réutilisable) ────────────────────────────
-expeditionSchema.methods.recalculer = function () {
-  // 1. Bénéfice par produit + totaux ventes
-  this.produits.forEach((p) => {
-    p.benefice = (p.prixVente || 0) - (p.prixAchat || 0);
-  });
+// ── Recalcul des totaux à partir des ventes peuplées ────────────────────────
+// Appelé manuellement depuis le controller (après populate).
+expeditionSchema.methods.recalculerDepuisVentes = function (ventesPopulees) {
+  // 1. Totaux ventes
+  this.totalVentes = ventesPopulees
+    .filter((v) => v.statutLivraison !== "annulé")
+    .reduce((sum, v) => sum + (v.prixVente || 0), 0);
 
-  this.totalVentes = this.produits.reduce(
-    (sum, p) => sum + (p.prixVente || 0),
-    0,
-  );
-
-  this.totalBeneficeVentes = this.produits.reduce(
-    (sum, p) => sum + (p.benefice || 0),
-    0,
-  );
+  this.totalBeneficeVentes = ventesPopulees
+    .filter((v) => v.statutLivraison !== "annulé")
+    .reduce((sum, v) => sum + (v.totalBenefice || 0), 0);
 
   // 2. Salaire commissionnaire selon le mode
   if (this.modeCommissionnaire === "pourcentage") {
@@ -103,68 +98,20 @@ expeditionSchema.methods.recalculer = function () {
   // 3. Total frais
   this.totalFrais = (this.fraisColis || 0) + (this.salaireCommissionnaire || 0);
 
-  // 4. Bénéfice net de l'expédition
+  // 4. Bénéfice net
   this.benefice = this.totalBeneficeVentes - this.totalFrais;
 };
 
-// ── Hook pre('save') — déclenché par .save() ─────────────────────────────────
+// ── Hook pre-save : recalcule les frais sans les ventes (si pas peuplées) ───
+// Le recalcul complet (avec ventes) doit être fait explicitement via le
+// controller avec recalculerDepuisVentes() avant save().
 expeditionSchema.pre("save", function () {
-  this.recalculer();
-});
-
-// ── Hook pre findOneAndUpdate — déclenché par findByIdAndUpdate ──────────────
-// IMPORTANT : on récupère le doc complet pour recalculer correctement
-expeditionSchema.pre(["findOneAndUpdate", "updateOne"], async function () {
-  const update = this.getUpdate();
-  const doc = await this.model.findOne(this.getFilter()).lean();
-  if (!doc) return;
-
-  // Fusionner les champs modifiés avec le doc existant
-  const fraisColis =
-    update.fraisColis !== undefined
-      ? Number(update.fraisColis)
-      : doc.fraisColis || 0;
-  const modeCommissionnaire =
-    update.modeCommissionnaire !== undefined
-      ? update.modeCommissionnaire
-      : doc.modeCommissionnaire;
-  const pourcentage =
-    update.pourcentageCommissionnaire !== undefined
-      ? Number(update.pourcentageCommissionnaire)
-      : doc.pourcentageCommissionnaire || 0;
-
-  // totalVentes + totalBeneficeVentes : recalculer depuis les produits
-  const produits =
-    update.produits !== undefined ? update.produits : doc.produits;
-
-  const totalVentes = (produits || []).reduce(
-    (sum, p) => sum + (p.prixVente || 0),
-    0,
-  );
-
-  const totalBeneficeVentes = (produits || []).reduce(
-    (sum, p) => sum + ((p.prixVente || 0) - (p.prixAchat || 0)),
-    0,
-  );
-
-  // Recalcul salaire si mode pourcentage
-  let salaire =
-    update.salaireCommissionnaire !== undefined
-      ? Number(update.salaireCommissionnaire)
-      : doc.salaireCommissionnaire || 0;
-
-  if (modeCommissionnaire === "pourcentage") {
-    salaire = (totalVentes * pourcentage) / 100;
-    update.salaireCommissionnaire = salaire;
+  if (this.modeCommissionnaire === "pourcentage") {
+    this.salaireCommissionnaire =
+      (this.totalVentes * (this.pourcentageCommissionnaire || 0)) / 100;
   }
-
-  const totalFrais = fraisColis + salaire;
-
-  update.totalVentes = totalVentes;
-  update.totalBeneficeVentes = totalBeneficeVentes;
-  update.totalFrais = totalFrais;
-  update.benefice = totalBeneficeVentes - totalFrais;
-  this.setUpdate(update);
+  this.totalFrais = (this.fraisColis || 0) + (this.salaireCommissionnaire || 0);
+  this.benefice = this.totalBeneficeVentes - this.totalFrais;
 });
 
 expeditionSchema.index({ dateExpedition: -1 });

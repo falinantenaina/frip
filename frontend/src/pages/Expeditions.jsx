@@ -52,12 +52,14 @@ const ExpeditionModal = ({ expedition, onClose }) => {
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
   const totalVentes = expedition?.totalVentes || 0;
+  const totalBeneficeVentes = expedition?.totalBeneficeVentes ?? totalVentes;
   const fraisColis = parseFloat(form.fraisColis) || 0;
   const salaire =
     form.modeCommissionnaire === "fixe"
       ? parseFloat(form.salaireCommissionnaire) || 0
       : (totalVentes * (parseFloat(form.pourcentageCommissionnaire) || 0)) /
         100;
+  const beneficeNetEstime = totalBeneficeVentes - fraisColis - salaire;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -266,22 +268,46 @@ const ExpeditionModal = ({ expedition, onClose }) => {
                       borderRadius: 6,
                       fontSize: 12,
                       display: "flex",
-                      justifyContent: "space-between",
+                      flexDirection: "column",
+                      gap: 4,
                     }}
                   >
-                    <span style={{ color: "var(--secondary-color)" }}>
-                      Bénéfice net estimé :
-                    </span>
-                    <strong
+                    {expedition?.totalBeneficeVentes !== undefined &&
+                      expedition.totalBeneficeVentes !== totalVentes && (
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <span style={{ color: "var(--secondary-color)" }}>
+                            Bén. brut ventes :
+                          </span>
+                          <strong style={{ color: "#0284c7" }}>
+                            {fmtAR(totalBeneficeVentes)}
+                          </strong>
+                        </div>
+                      )}
+                    <div
                       style={{
-                        color:
-                          totalVentes - fraisColis - salaire >= 0
-                            ? "var(--success-color)"
-                            : "var(--danger-color)",
+                        display: "flex",
+                        justifyContent: "space-between",
                       }}
                     >
-                      {fmtAR(totalVentes - fraisColis - salaire)}
-                    </strong>
+                      <span style={{ color: "var(--secondary-color)" }}>
+                        Bénéfice net estimé :
+                      </span>
+                      <strong
+                        style={{
+                          color:
+                            beneficeNetEstime >= 0
+                              ? "var(--success-color)"
+                              : "var(--danger-color)",
+                        }}
+                      >
+                        {fmtAR(beneficeNetEstime)}
+                      </strong>
+                    </div>
                   </div>
                 )}
               </div>
@@ -334,6 +360,7 @@ const ExpedierModal = ({ expedition, onClose }) => {
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
   const totalVentes = expedition?.totalVentes || 0;
+  const totalBeneficeVentes = expedition?.totalBeneficeVentes ?? totalVentes;
   const fraisColis = parseFloat(form.fraisColis) || 0;
   const salaire =
     form.modeCommissionnaire === "fixe"
@@ -341,7 +368,7 @@ const ExpedierModal = ({ expedition, onClose }) => {
       : (totalVentes * (parseFloat(form.pourcentageCommissionnaire) || 0)) /
         100;
   const totalFrais = fraisColis + salaire;
-  const netEstime = totalVentes - totalFrais;
+  const netEstime = totalBeneficeVentes - totalFrais;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -388,7 +415,8 @@ const ExpedierModal = ({ expedition, onClose }) => {
                 marginTop: 4,
               }}
             >
-              {expedition.produits?.length || 0} produit(s) · CA :{" "}
+              {/* Nombre de ventes rattachées au lieu de produits */}
+              {expedition.ventes?.length || 0} vente(s) · CA :{" "}
               {fmtAR(totalVentes)}
             </p>
           </div>
@@ -521,6 +549,11 @@ const ExpedierModal = ({ expedition, onClose }) => {
                     color: "var(--success-color)",
                   },
                   {
+                    label: "Bén. brut ventes",
+                    val: totalBeneficeVentes,
+                    color: "#0284c7",
+                  },
+                  {
                     label: "Frais colis",
                     val: fraisColis,
                     color: "var(--danger-color)",
@@ -611,15 +644,15 @@ const ExpedierModal = ({ expedition, onClose }) => {
   );
 };
 
-// ── Modal Ajouter Produits ───────────────────────────────────────────────────
-const AjouterProduitsModal = ({ expedition, onClose }) => {
-  const [mode, setMode] = useState("ventes");
+// ── Modal Rattacher des ventes (depuis la liste, en préparation) ──────────────
+// Remplace AjouterProduitsModal : on ne rattache plus que des ventes existantes.
+// La saisie manuelle de produits n'existe plus — les produits sont gérés
+// directement dans la page /expeditions/:id/ventes.
+const RattacherVentesModal = ({ expedition, onClose }) => {
   const [ventesDispos, setVentesDispos] = useState([]);
   const [selected, setSelected] = useState([]);
-  const [manuelRows, setManuelRows] = useState([
-    { nomProduit: "", tailleProduit: "", prixVente: "" },
-  ]);
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
 
   useEffect(() => {
     api
@@ -627,7 +660,8 @@ const AjouterProduitsModal = ({ expedition, onClose }) => {
         `/expeditions/ventes-disponibles?destination=${expedition.destination}`,
       )
       .then((r) => setVentesDispos(r.data.data))
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setFetching(false));
   }, [expedition.destination]);
 
   const toggleSelect = (v) =>
@@ -638,46 +672,20 @@ const AjouterProduitsModal = ({ expedition, onClose }) => {
     );
 
   const handleSubmit = async () => {
+    if (!selected.length) {
+      toast.error("Sélectionner au moins une vente");
+      return;
+    }
     setLoading(true);
     try {
-      let produits = [];
-      if (mode === "ventes") {
-        produits = selected.flatMap((v) =>
-          (v.produits?.length > 0
-            ? v.produits
-            : [
-                {
-                  nomProduit: v.nomProduit,
-                  tailleProduit: v.tailleProduit,
-                  prixVente: v.prixVente,
-                },
-              ]
-          ).map((p) => ({
-            vente: v._id,
-            nomProduit: p.nomProduit,
-            tailleProduit: p.tailleProduit,
-            prixVente: p.prixVente,
-          })),
-        );
-      } else {
-        produits = manuelRows
-          .filter((r) => r.nomProduit && r.prixVente)
-          .map((r) => ({
-            nomProduit: r.nomProduit,
-            tailleProduit: r.tailleProduit,
-            prixVente: parseFloat(r.prixVente),
-          }));
-      }
-      if (!produits.length) {
-        toast.error("Aucun produit à ajouter");
-        setLoading(false);
-        return;
-      }
-      await api.post(`/expeditions/${expedition._id}/produits`, { produits });
-      toast.success(`${produits.length} produit(s) ajouté(s)`);
+      // Rattachement bulk via POST /:id/ventes
+      await api.post(`/expeditions/${expedition._id}/ventes`, {
+        venteIds: selected.map((v) => v._id),
+      });
+      toast.success(`${selected.length} vente(s) rattachée(s)`);
       onClose(true);
-    } catch {
-      toast.error("Erreur");
+    } catch (e) {
+      toast.error(e.response?.data?.message || "Erreur");
     } finally {
       setLoading(false);
     }
@@ -693,7 +701,7 @@ const AjouterProduitsModal = ({ expedition, onClose }) => {
         className="modal"
         onClick={(e) => e.stopPropagation()}
         style={{
-          maxWidth: 580,
+          maxWidth: 560,
           width: "calc(100% - 24px)",
           maxHeight: "90vh",
           overflowY: "auto",
@@ -701,201 +709,101 @@ const AjouterProduitsModal = ({ expedition, onClose }) => {
       >
         <div className="modal-header">
           <h3 className="modal-title">
-            Ajouter des produits — {expedition.nom}
+            📦 Rattacher des ventes — {expedition.nom}
           </h3>
           <button className="modal-close" onClick={() => onClose(false)}>
             <FaTimes />
           </button>
         </div>
         <div className="modal-body">
-          <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
-            {[
-              ["ventes", "📦 Depuis ventes"],
-              ["manuel", "✏️ Saisie manuelle"],
-            ].map(([m, l]) => (
-              <button
-                key={m}
-                onClick={() => setMode(m)}
-                className={`btn ${mode === m ? "btn-primary" : "btn-secondary"}`}
-                style={{ flex: 1 }}
-              >
-                {l}
-              </button>
-            ))}
-          </div>
-          {mode === "ventes" ? (
-            <div>
-              <p
-                style={{
-                  fontSize: 13,
-                  color: "var(--secondary-color)",
-                  marginBottom: 10,
-                }}
-              >
-                Ventes non expédiées — destination {expedition.destination}
-              </p>
-              {ventesDispos.length === 0 ? (
-                <p className="no-data">
-                  Aucune vente disponible pour {expedition.destination}
-                </p>
-              ) : (
-                <div style={{ maxHeight: 300, overflowY: "auto" }}>
-                  {ventesDispos.map((v) => (
-                    <div
-                      key={v._id}
-                      onClick={() => toggleSelect(v)}
-                      style={{
-                        padding: "10px 12px",
-                        marginBottom: 6,
-                        borderRadius: 8,
-                        cursor: "pointer",
-                        border: selected.find((s) => s._id === v._id)
-                          ? "2px solid var(--primary-color)"
-                          : "1px solid var(--border-color)",
-                        background: selected.find((s) => s._id === v._id)
-                          ? "#eff6ff"
-                          : "white",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                        }}
-                      >
-                        <strong style={{ fontSize: 14 }}>{v.nomClient}</strong>
-                        <span
-                          style={{
-                            color: "var(--success-color)",
-                            fontWeight: 700,
-                          }}
-                        >
-                          {fmtAR(v.prixVente)}
-                        </span>
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          color: "var(--secondary-color)",
-                          marginTop: 2,
-                        }}
-                      >
-                        {v.produits?.length > 1
-                          ? `📦 ${v.produits.length} produits`
-                          : v.nomProduit}
-                        {v.tailleProduit ? ` · ${v.tailleProduit}` : ""} ·{" "}
-                        {format(new Date(v.dateVente), "dd/MM/yyyy")}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {selected.length > 0 && (
-                <div
-                  style={{
-                    marginTop: 12,
-                    padding: "8px 12px",
-                    background: "#eff6ff",
-                    borderRadius: 8,
-                    fontSize: 13,
-                    color: "#1d4ed8",
-                  }}
-                >
-                  {selected.length} sélectionnée(s) — Total :{" "}
-                  {fmtAR(selected.reduce((s, v) => s + v.prixVente, 0))}
-                </div>
-              )}
+          <p
+            style={{
+              fontSize: 13,
+              color: "var(--secondary-color)",
+              marginBottom: 12,
+            }}
+          >
+            Ventes non expédiées — destination {expedition.destination}
+          </p>
+
+          {fetching ? (
+            <div style={{ textAlign: "center", padding: 24 }}>
+              <div className="spinner" />
             </div>
+          ) : ventesDispos.length === 0 ? (
+            <p className="no-data">
+              Aucune vente disponible pour {expedition.destination}
+            </p>
           ) : (
-            <div>
-              {manuelRows.map((row, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 80px 120px 30px",
-                    gap: 8,
-                    marginBottom: 8,
-                    alignItems: "end",
-                  }}
-                >
-                  <div>
-                    <label className="form-label" style={{ fontSize: 11 }}>
-                      Produit
-                    </label>
-                    <input
-                      className="form-input"
-                      style={{ padding: "8px 10px" }}
-                      placeholder="Nom"
-                      value={row.nomProduit}
-                      onChange={(e) => {
-                        const r = [...manuelRows];
-                        r[idx].nomProduit = e.target.value;
-                        setManuelRows(r);
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label className="form-label" style={{ fontSize: 11 }}>
-                      Taille
-                    </label>
-                    <input
-                      className="form-input"
-                      style={{ padding: "8px 10px" }}
-                      placeholder="L"
-                      value={row.tailleProduit}
-                      onChange={(e) => {
-                        const r = [...manuelRows];
-                        r[idx].tailleProduit = e.target.value;
-                        setManuelRows(r);
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label className="form-label" style={{ fontSize: 11 }}>
-                      Prix (AR)
-                    </label>
-                    <input
-                      type="number"
-                      className="form-input"
-                      style={{ padding: "8px 10px" }}
-                      placeholder="0"
-                      value={row.prixVente}
-                      onChange={(e) => {
-                        const r = [...manuelRows];
-                        r[idx].prixVente = e.target.value;
-                        setManuelRows(r);
-                      }}
-                    />
-                  </div>
-                  <button
-                    onClick={() =>
-                      setManuelRows((r) => r.filter((_, i) => i !== idx))
-                    }
+            <div style={{ maxHeight: 320, overflowY: "auto" }}>
+              {ventesDispos.map((v) => {
+                const isSelected = !!selected.find((s) => s._id === v._id);
+                return (
+                  <div
+                    key={v._id}
+                    onClick={() => toggleSelect(v)}
                     style={{
-                      background: "none",
-                      border: "none",
-                      color: "var(--danger-color)",
+                      padding: "10px 12px",
+                      marginBottom: 6,
+                      borderRadius: 8,
                       cursor: "pointer",
+                      border: isSelected
+                        ? "2px solid var(--primary-color)"
+                        : "1px solid var(--border-color)",
+                      background: isSelected ? "#eff6ff" : "white",
                     }}
                   >
-                    <FaTimes />
-                  </button>
-                </div>
-              ))}
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() =>
-                  setManuelRows((r) => [
-                    ...r,
-                    { nomProduit: "", tailleProduit: "", prixVente: "" },
-                  ])
-                }
-              >
-                <FaPlus /> Ajouter une ligne
-              </button>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <strong style={{ fontSize: 14 }}>{v.nomClient}</strong>
+                      <span
+                        style={{
+                          color: "var(--success-color)",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {fmtAR(v.prixVente)}
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: "var(--secondary-color)",
+                        marginTop: 2,
+                      }}
+                    >
+                      {v.produits?.length > 1
+                        ? `📦 ${v.produits.length} produits`
+                        : v.nomProduit}
+                      {v.tailleProduit ? ` · ${v.tailleProduit}` : ""} ·{" "}
+                      {format(new Date(v.dateVente), "dd/MM/yyyy")}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
+
+          {selected.length > 0 && (
+            <div
+              style={{
+                marginTop: 12,
+                padding: "8px 12px",
+                background: "#eff6ff",
+                borderRadius: 8,
+                fontSize: 13,
+                color: "#1d4ed8",
+              }}
+            >
+              {selected.length} sélectionnée(s) — Total :{" "}
+              {fmtAR(selected.reduce((s, v) => s + v.prixVente, 0))}
+            </div>
+          )}
+
           <div
             style={{
               display: "flex",
@@ -913,9 +821,9 @@ const AjouterProduitsModal = ({ expedition, onClose }) => {
             <button
               className="btn btn-primary"
               onClick={handleSubmit}
-              disabled={loading}
+              disabled={loading || !selected.length}
             >
-              {loading ? "Ajout..." : "Ajouter"}
+              {loading ? "Rattachement..." : "Rattacher"}
             </button>
           </div>
         </div>
@@ -934,7 +842,6 @@ const Expeditions = () => {
   const [editing, setEditing] = useState(null);
   const [expedierModal, setExpedierModal] = useState(null);
   const [addingTo, setAddingTo] = useState(null);
-  const [expanded, setExpanded] = useState(new Set());
   const [filterStatut, setFilterStatut] = useState("");
 
   useEffect(() => {
@@ -951,13 +858,6 @@ const Expeditions = () => {
     r.success ? toast.success("Supprimée") : toast.error(r.message);
   };
 
-  const toggleExpand = (id) =>
-    setExpanded((p) => {
-      const n = new Set(p);
-      n.has(id) ? n.delete(id) : n.add(id);
-      return n;
-    });
-
   const filtered = expeditions.filter(
     (e) => !filterStatut || e.statut === filterStatut,
   );
@@ -968,9 +868,18 @@ const Expeditions = () => {
   const totalCAExpédie = filtered.reduce((s, e) => s + (e.totalVentes || 0), 0);
   const totalBeneficeNet = filtered
     .filter((e) => e.statut !== "en_preparation" && e.statut !== "annulée")
-    .reduce((s, e) => s + (e.totalVentes - e.totalFrais), 0);
-  const totalProduits = filtered.reduce(
-    (s, e) => s + (e.produits?.length || 0),
+    .reduce(
+      (s, e) =>
+        s +
+        (e.benefice !== undefined
+          ? e.benefice
+          : (e.totalVentes || 0) - (e.totalFrais || 0)),
+      0,
+    );
+
+  // Nombre total de ventes rattachées (remplace totalProduits)
+  const totalVentesRattachees = filtered.reduce(
+    (s, e) => s + (e.ventes?.length || 0),
     0,
   );
 
@@ -1021,8 +930,8 @@ const Expeditions = () => {
             <FaBoxOpen />
           </div>
           <div className="stat-info">
-            <h3>{totalProduits}</h3>
-            <p>Produits</p>
+            <h3>{totalVentesRattachees}</h3>
+            <p>Ventes rattachées</p>
           </div>
         </div>
         <div className="stat-card">
@@ -1087,9 +996,12 @@ const Expeditions = () => {
       ) : (
         filtered.map((exp) => {
           const cfg = statutConfig[exp.statut] || {};
-          const isExpanded = expanded.has(exp._id);
           const isEnPrepa = exp.statut === "en_preparation";
-          const beneficeNet = (exp.totalVentes || 0) - (exp.totalFrais || 0);
+          const beneficeNet =
+            exp.benefice !== undefined
+              ? exp.benefice
+              : (exp.totalVentes || 0) - (exp.totalFrais || 0);
+          const nbVentes = exp.ventes?.length || 0;
 
           return (
             <div
@@ -1105,7 +1017,6 @@ const Expeditions = () => {
                   : "4px solid var(--primary-color)",
               }}
             >
-              {/* Header */}
               <div style={{ padding: "14px 16px" }}>
                 <div
                   style={{
@@ -1116,6 +1027,7 @@ const Expeditions = () => {
                     gap: 10,
                   }}
                 >
+                  {/* Infos principales */}
                   <div style={{ flex: 1 }}>
                     <div
                       style={{
@@ -1158,8 +1070,7 @@ const Expeditions = () => {
                       }}
                     >
                       <FaCalendarAlt style={{ marginRight: 4 }} />
-                      {fmtDate(exp.dateExpedition)} ·{" "}
-                      {exp.produits?.length || 0} produit(s)
+                      {fmtDate(exp.dateExpedition)} · {nbVentes} vente(s)
                       {exp.notes && <span> · 📝 {exp.notes}</span>}
                     </div>
                   </div>
@@ -1189,6 +1100,19 @@ const Expeditions = () => {
                     </div>
                     {!isEnPrepa ? (
                       <>
+                        <div style={{ textAlign: "center" }}>
+                          <div
+                            style={{
+                              color: "var(--secondary-color)",
+                              fontSize: 11,
+                            }}
+                          >
+                            Bén. brut ventes
+                          </div>
+                          <strong style={{ color: "#0284c7" }}>
+                            {fmtAR(exp.totalBeneficeVentes ?? exp.totalVentes)}
+                          </strong>
+                        </div>
                         <div style={{ textAlign: "center" }}>
                           <div
                             style={{
@@ -1290,30 +1214,21 @@ const Expeditions = () => {
                       flexWrap: "wrap",
                     }}
                   >
-                    {exp.produits?.length > 0 && (
-                      <button
-                        onClick={() => toggleExpand(exp._id)}
-                        className="btn btn-sm btn-secondary"
-                      >
-                        {isExpanded ? "▲" : "▼"} ({exp.produits.length})
-                      </button>
-                    )}
-
-                    {/* ← Navigation vers la page dédiée au lieu du modal */}
+                    {/* Navigation vers la page dédiée */}
                     <button
                       onClick={() => navigate(`/expeditions/${exp._id}/ventes`)}
                       className="btn btn-sm btn-secondary"
                       style={{ color: "#1d4ed8", fontWeight: 600 }}
                       title="Gérer les ventes"
                     >
-                      👥 Ventes
+                      👥 {nbVentes > 0 ? `Ventes (${nbVentes})` : "Ventes"}
                     </button>
 
                     {isEnPrepa && (
                       <button
                         onClick={() => setAddingTo(exp)}
                         className="btn btn-sm btn-secondary"
-                        title="Ajouter produits"
+                        title="Rattacher des ventes"
                       >
                         <FaPlus />
                       </button>
@@ -1348,110 +1263,6 @@ const Expeditions = () => {
                   </div>
                 </div>
               </div>
-
-              {/* Détail produits dépliable */}
-              {isExpanded && exp.produits && exp.produits.length > 0 && (
-                <div
-                  style={{
-                    borderTop: "1px solid var(--border-color)",
-                    background: "#f8fafc",
-                  }}
-                >
-                  <div
-                    style={{
-                      padding: "8px 16px",
-                      display: "grid",
-                      gridTemplateColumns: "30px 1fr 80px 110px",
-                      gap: 8,
-                      fontWeight: 600,
-                      fontSize: 11,
-                      color: "var(--secondary-color)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px",
-                      borderBottom: "1px solid var(--border-color)",
-                    }}
-                  >
-                    <span>#</span>
-                    <span>Produit</span>
-                    <span>Taille</span>
-                    <span style={{ textAlign: "right" }}>Prix</span>
-                  </div>
-                  {exp.produits.map((p, idx) => (
-                    <div
-                      key={p._id || idx}
-                      style={{
-                        padding: "8px 16px",
-                        display: "grid",
-                        gridTemplateColumns: "30px 1fr 80px 110px",
-                        gap: 8,
-                        fontSize: 13,
-                        borderBottom:
-                          idx < exp.produits.length - 1
-                            ? "1px solid var(--border-color)"
-                            : "none",
-                      }}
-                    >
-                      <span style={{ color: "#94a3b8" }}>{idx + 1}</span>
-                      <span>
-                        <strong>{p.nomProduit}</strong>
-                      </span>
-                      <span style={{ color: "var(--secondary-color)" }}>
-                        {p.tailleProduit || "—"}
-                      </span>
-                      <span
-                        style={{
-                          textAlign: "right",
-                          color: "var(--success-color)",
-                          fontWeight: 600,
-                        }}
-                      >
-                        {fmtAR(p.prixVente)}
-                      </span>
-                    </div>
-                  ))}
-                  <div
-                    style={{
-                      padding: "10px 16px",
-                      display: "flex",
-                      justifyContent: "flex-end",
-                      gap: 20,
-                      fontSize: 13,
-                      borderTop: "2px solid var(--border-color)",
-                      fontWeight: 700,
-                    }}
-                  >
-                    <span>
-                      CA :{" "}
-                      <span style={{ color: "var(--success-color)" }}>
-                        {fmtAR(exp.totalVentes)}
-                      </span>
-                    </span>
-                    {!isEnPrepa && (
-                      <>
-                        <span>
-                          Frais :{" "}
-                          <span style={{ color: "var(--danger-color)" }}>
-                            {fmtAR(exp.totalFrais)}
-                          </span>
-                        </span>
-                        <span>
-                          Bénéfice net :{" "}
-                          <span
-                            style={{
-                              color:
-                                beneficeNet >= 0
-                                  ? "var(--success-color)"
-                                  : "var(--danger-color)",
-                            }}
-                          >
-                            {fmtAR(beneficeNet)}
-                          </span>
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
           );
         })
@@ -1478,7 +1289,7 @@ const Expeditions = () => {
         />
       )}
       {addingTo && (
-        <AjouterProduitsModal
+        <RattacherVentesModal
           expedition={addingTo}
           onClose={(did) => {
             setAddingTo(null);

@@ -3,6 +3,7 @@ import Expedition from "../models/expedition.model.js";
 import Livreur from "../models/livreur.model.js";
 import Produit from "../models/produit.model.js";
 import Vente from "../models/vente.model.js";
+import { recalculerEtSauvegarderExpedition } from "./expedition.controller.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -13,33 +14,27 @@ const POPULATE_VENTE = [
   { path: "livreur", select: "nom telephone" },
 ];
 
-/** Mettre à jour l'expédition liée après modification d'une vente */
+/**
+ * Mettre à jour l'expédition liée après modification d'une vente.
+ * Puisque l'expédition référence directement les ventes (plus de copie),
+ * il suffit de recalculer ses totaux.
+ * Si la vente est annulée, on la retire du tableau de ventes de l'expédition.
+ */
 async function syncExpedition(vente) {
   if (!vente.expedition) return;
+
   const expedition = await Expedition.findById(vente.expedition);
   if (!expedition) return;
 
-  const venteIdStr = vente._id.toString();
-
   if (vente.statutLivraison === "annulé") {
-    expedition.produits = expedition.produits.filter(
-      (p) => p.vente?.toString() !== venteIdStr,
+    // Retirer la vente de l'expédition et détacher
+    expedition.ventes = expedition.ventes.filter(
+      (id) => id.toString() !== vente._id.toString(),
     );
     await Vente.findByIdAndUpdate(vente._id, { expedition: null });
-  } else {
-    const produitsVente = (vente.produits || []).map((p) => ({
-      vente: vente._id,
-      nomProduit: p.nomProduit,
-      tailleProduit: p.tailleProduit,
-      prixVente: p.prixVente,
-    }));
-    expedition.produits = [
-      ...expedition.produits.filter((p) => p.vente?.toString() !== venteIdStr),
-      ...produitsVente,
-    ];
   }
-
-  await expedition.save();
+  // Qu'elle soit annulée ou simplement modifiée, on recalcule les totaux
+  await recalculerEtSauvegarderExpedition(expedition);
 }
 
 /** Synchroniser les stats d'une balle après modification d'une vente */
@@ -103,16 +98,6 @@ export const getVente = async (req, res, next) => {
 };
 
 // ── POST /ventes ──────────────────────────────────────────────────────────────
-/**
- * Créer une nouvelle vente avec un premier produit.
- * Body attendu :
- * - nomClient, telephoneClient, destinationClient
- * - typeVente: "balle" | "libre"
- * - balle (si typeVente === "balle")
- * - produit (optionnel, référence Produit)
- * - nomProduit, tailleProduit, prixVente, prixAchat, categorie  (1er produit)
- * - livreur, fraisLivraison, lieuLivraison, statutLivraison, commentaires
- */
 export const createVente = async (req, res, next) => {
   try {
     const {
@@ -153,12 +138,10 @@ export const createVente = async (req, res, next) => {
           .status(404)
           .json({ success: false, message: "Produit non trouvé" });
       if (produitDoc.statut !== "disponible") {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Ce produit n'est plus disponible",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Ce produit n'est plus disponible",
+        });
       }
       produitDoc.statut = "vendu";
       await produitDoc.save();
@@ -220,12 +203,6 @@ export const createVente = async (req, res, next) => {
 };
 
 // ── PUT /ventes/:id ───────────────────────────────────────────────────────────
-/**
- * Modifier les informations générales d'une vente (PAS les produits).
- * Champs modifiables : nomClient, telephoneClient, destinationClient,
- * livreur, fraisLivraison, lieuLivraison, statutLivraison, commentaires,
- * raisonAnnulation.
- */
 export const updateVente = async (req, res, next) => {
   try {
     const vente = await Vente.findById(req.params.id);
@@ -234,12 +211,10 @@ export const updateVente = async (req, res, next) => {
         .status(404)
         .json({ success: false, message: "Vente non trouvée" });
     if (vente.statutLivraison === "annulé") {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Impossible de modifier une vente annulée",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Impossible de modifier une vente annulée",
+      });
     }
 
     const CHAMPS_EDITABLES = [
@@ -267,9 +242,11 @@ export const updateVente = async (req, res, next) => {
     }
 
     await vente.save(); // pre-save recalcule montantTotal
-    await syncExpedition(vente);
-    await vente.populate(POPULATE_VENTE);
 
+    // Recalcul des totaux de l'expédition liée (source unique = les ventes)
+    await syncExpedition(vente);
+
+    await vente.populate(POPULATE_VENTE);
     res.json({ success: true, data: vente });
   } catch (err) {
     next(err);
@@ -277,9 +254,6 @@ export const updateVente = async (req, res, next) => {
 };
 
 // ── POST /ventes/:id/produits ─────────────────────────────────────────────────
-/**
- * Ajouter un produit à une vente existante.
- */
 export const ajouterProduitVente = async (req, res, next) => {
   try {
     const vente = await Vente.findById(req.params.id);
@@ -288,12 +262,10 @@ export const ajouterProduitVente = async (req, res, next) => {
         .status(404)
         .json({ success: false, message: "Vente non trouvée" });
     if (vente.statutLivraison === "annulé") {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Impossible d'ajouter un produit à une vente annulée",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Impossible de modifier une vente annulée",
+      });
     }
 
     const {
@@ -305,6 +277,8 @@ export const ajouterProduitVente = async (req, res, next) => {
       categorie = "autres",
     } = req.body;
 
+    const ancienTotal = vente.prixVente || 0;
+
     let produitDoc = null;
     if (produitId) {
       produitDoc = await Produit.findById(produitId);
@@ -312,19 +286,16 @@ export const ajouterProduitVente = async (req, res, next) => {
         return res
           .status(404)
           .json({ success: false, message: "Produit non trouvé" });
-      if (produitDoc.statut !== "disponible") {
+      if (produitDoc.statut !== "disponible")
         return res
           .status(400)
           .json({
             success: false,
             message: "Ce produit n'est plus disponible",
           });
-      }
       produitDoc.statut = "vendu";
       await produitDoc.save();
     }
-
-    const ancienTotal = vente.prixVente || 0;
 
     vente.produits.push({
       produit: produitDoc?._id || null,
@@ -335,13 +306,13 @@ export const ajouterProduitVente = async (req, res, next) => {
       categorie,
     });
 
-    await vente.save(); // pre-save recalcule tout
+    await vente.save();
 
-    // Sync balle
     if (vente.balle) {
       await syncBalle(vente.balle, ancienTotal, vente.prixVente, 1);
     }
 
+    // L'expédition recalcule ses totaux depuis les vraies données de la vente
     await syncExpedition(vente);
     await vente.populate(POPULATE_VENTE);
 
@@ -352,9 +323,6 @@ export const ajouterProduitVente = async (req, res, next) => {
 };
 
 // ── PUT /ventes/:id/produits/:produitEntryId ──────────────────────────────────
-/**
- * Modifier un produit dans une vente.
- */
 export const modifierProduitVente = async (req, res, next) => {
   try {
     const { id, produitEntryId } = req.params;
@@ -364,12 +332,10 @@ export const modifierProduitVente = async (req, res, next) => {
         .status(404)
         .json({ success: false, message: "Vente non trouvée" });
     if (vente.statutLivraison === "annulé") {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Impossible de modifier une vente annulée",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Impossible de modifier une vente annulée",
+      });
     }
 
     const produitEntry = vente.produits.id(produitEntryId);
@@ -390,13 +356,11 @@ export const modifierProduitVente = async (req, res, next) => {
       nouveauProduitId &&
       produitEntry.produit?.toString() !== nouveauProduitId
     ) {
-      // Remettre l'ancien produit en stock
       if (produitEntry.produit) {
         await Produit.findByIdAndUpdate(produitEntry.produit, {
           statut: "disponible",
         });
       }
-      // Marquer le nouveau comme vendu
       const nouveauProduit = await Produit.findByIdAndUpdate(
         nouveauProduitId,
         { statut: "vendu" },
@@ -410,7 +374,6 @@ export const modifierProduitVente = async (req, res, next) => {
       produitEntry.produit = nouveauProduitId;
     }
 
-    // Appliquer les modifications
     const { nomProduit, tailleProduit, prixVente, prixAchat, categorie } =
       req.body;
     if (nomProduit !== undefined) produitEntry.nomProduit = nomProduit;
@@ -421,11 +384,11 @@ export const modifierProduitVente = async (req, res, next) => {
 
     await vente.save(); // pre-save recalcule tout
 
-    // Sync balle
     if (vente.balle) {
       await syncBalle(vente.balle, ancienTotal, vente.prixVente, 0);
     }
 
+    // L'expédition recalcule ses totaux depuis les vraies données de la vente
     await syncExpedition(vente);
     await vente.populate(POPULATE_VENTE);
 
@@ -436,9 +399,6 @@ export const modifierProduitVente = async (req, res, next) => {
 };
 
 // ── DELETE /ventes/:id/produits/:produitEntryId ───────────────────────────────
-/**
- * Supprimer un produit d'une vente.
- */
 export const supprimerProduitVente = async (req, res, next) => {
   try {
     const { id, produitEntryId } = req.params;
@@ -463,19 +423,18 @@ export const supprimerProduitVente = async (req, res, next) => {
     const entry = vente.produits[entryIndex];
     const ancienTotal = vente.prixVente || 0;
 
-    // Remettre le produit référencé en stock
     if (entry.produit) {
       await Produit.findByIdAndUpdate(entry.produit, { statut: "disponible" });
     }
 
     vente.produits.splice(entryIndex, 1);
-    await vente.save(); // pre-save recalcule tout
+    await vente.save();
 
-    // Sync balle
     if (vente.balle) {
       await syncBalle(vente.balle, ancienTotal, vente.prixVente, -1);
     }
 
+    // L'expédition recalcule ses totaux depuis les vraies données de la vente
     await syncExpedition(vente);
     await vente.populate(POPULATE_VENTE);
 
@@ -502,7 +461,6 @@ export const annulerVente = async (req, res, next) => {
     const ancienTotal = vente.prixVente || 0;
     const nbProduits = vente.produits?.length || 0;
 
-    // Remettre tous les produits référencés en stock
     for (const entry of vente.produits || []) {
       if (entry.produit) {
         await Produit.findByIdAndUpdate(entry.produit, {
@@ -511,7 +469,6 @@ export const annulerVente = async (req, res, next) => {
       }
     }
 
-    // Sync balle
     if (vente.balle) {
       await syncBalle(vente.balle, ancienTotal, 0, -nbProduits);
     }
@@ -519,6 +476,8 @@ export const annulerVente = async (req, res, next) => {
     vente.statutLivraison = "annulé";
     vente.raisonAnnulation = req.body.raisonAnnulation || "Non spécifiée";
     await vente.save();
+
+    // Retire la vente de l'expédition et recalcule
     await syncExpedition(vente);
     await vente.populate(POPULATE_VENTE);
 
@@ -537,7 +496,6 @@ export const deleteVente = async (req, res, next) => {
         .status(404)
         .json({ success: false, message: "Vente non trouvée" });
 
-    // Si pas encore annulée, remettre les produits en stock et sync balle
     if (vente.statutLivraison !== "annulé") {
       for (const entry of vente.produits || []) {
         if (entry.produit) {
@@ -553,6 +511,17 @@ export const deleteVente = async (req, res, next) => {
           0,
           -(vente.produits?.length || 0),
         );
+      }
+
+      // Retirer la vente de l'expédition et recalculer avant suppression
+      if (vente.expedition) {
+        const expedition = await Expedition.findById(vente.expedition);
+        if (expedition) {
+          expedition.ventes = expedition.ventes.filter(
+            (id) => id.toString() !== vente._id.toString(),
+          );
+          await recalculerEtSauvegarderExpedition(expedition);
+        }
       }
     }
 

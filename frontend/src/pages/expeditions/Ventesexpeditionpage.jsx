@@ -1200,6 +1200,16 @@ const VentesExpeditionPage = () => {
   const ventes = data?.ventes || [];
   const activeVentes = ventes.filter((v) => v.statutLivraison !== "annulé");
   const caActif = activeVentes.reduce((s, v) => s + (v.prixVente || 0), 0);
+  // Bénéfice brut des ventes actives (somme des totalBenefice de chaque vente)
+  const beneficeVentesActif = activeVentes.reduce(
+    (s, v) => s + (v.totalBenefice || 0),
+    0,
+  );
+  // Bénéfice net = données calculées par le backend (totalBeneficeVentes - totalFrais)
+  const beneficeNet =
+    exp?.benefice !== undefined
+      ? exp.benefice
+      : beneficeVentesActif - (exp?.totalFrais || 0);
   const isEnPrepa = exp?.statut === "en_preparation";
 
   const expedStatutCfg = EXPEDITION_STATUT[exp?.statut] || {};
@@ -1292,23 +1302,33 @@ const VentesExpeditionPage = () => {
         >
           {[
             {
-              label: "CA actif",
+              label: "Total Ventes",
               value: fmtAR(caActif),
               color: "#059669",
               icon: "💰",
+            },
+            {
+              label: "Total Achats",
+              value: fmtAR(caActif - beneficeNet),
+              color: "#0284c7",
+              icon: "📊",
             },
             {
               label: "Total frais",
               value: fmtAR(exp.totalFrais || 0),
               color: "#dc2626",
               icon: "📦",
+              sub:
+                exp.fraisColis || exp.salaireCommissionnaire
+                  ? `Colis: ${fmtAR(exp.fraisColis)} · Commission: ${fmtAR(exp.salaireCommissionnaire)}`
+                  : null,
             },
             {
               label: "Bénéfice net",
-              value: fmtAR(caActif - (exp.totalFrais || 0)),
-              color:
-                caActif - (exp.totalFrais || 0) >= 0 ? "#059669" : "#dc2626",
+              value: fmtAR(beneficeNet),
+              color: beneficeNet >= 0 ? "#059669" : "#dc2626",
               icon: "📈",
+              highlight: true,
             },
             {
               label: "Ventes",
@@ -1320,9 +1340,19 @@ const VentesExpeditionPage = () => {
             <div
               key={item.label}
               style={{
-                background: "white",
+                background: item.highlight
+                  ? beneficeNet >= 0
+                    ? "#f0fdf4"
+                    : "#fff1f2"
+                  : "white",
                 borderRadius: 12,
-                border: "1.5px solid #e2e8f0",
+                border: `1.5px solid ${
+                  item.highlight
+                    ? beneficeNet >= 0
+                      ? "#bbf7d0"
+                      : "#fecdd3"
+                    : "#e2e8f0"
+                }`,
                 padding: "12px 14px",
                 boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
               }}
@@ -1333,6 +1363,11 @@ const VentesExpeditionPage = () => {
               <div style={{ fontSize: 15, fontWeight: 700, color: item.color }}>
                 {item.value}
               </div>
+              {item.sub && (
+                <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 3 }}>
+                  {item.sub}
+                </div>
+              )}
             </div>
           ))}
         </div>

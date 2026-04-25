@@ -1,6 +1,5 @@
 import express from "express";
 import {
-  ajouterProduitsExpedition,
   annulerVenteExpedition,
   createExpedition,
   deleteExpedition,
@@ -12,7 +11,7 @@ import {
   getExpeditionsStats,
   getVentesDisponiblesExpedition,
   rattacherVente,
-  retirerProduitExpedition,
+  rattacherVentesBulk,
   updateExpedition,
 } from "../controllers/expedition.controller.js";
 import { authorize, protect } from "../middlewares/auth.middleware.js";
@@ -36,7 +35,12 @@ router
   .delete(authorize("admin"), deleteExpedition);
 
 router.put("/:id/expedier", authorize("admin"), expedierExpedition);
+
+// Rattacher une ou plusieurs ventes
 router.put("/:id/rattacher-vente", authorize("admin"), rattacherVente);
+router.post("/:id/ventes", authorize("admin"), rattacherVentesBulk);
+
+// Annuler / détacher une vente de l'expédition
 router.put(
   "/:id/annuler-vente/:venteId",
   authorize("admin"),
@@ -47,11 +51,8 @@ router.put(
   authorize("admin"),
   detacherVenteExpedition,
 );
-router.post("/:id/produits", authorize("admin"), ajouterProduitsExpedition);
-router.delete(
-  "/:id/produits/:produitId",
-  authorize("admin"),
-  retirerProduitExpedition,
-);
+
+// NOTE : Les anciennes routes /:id/produits et /:id/produits/:produitId
+// ont été supprimées. Gérez les produits directement via les routes /ventes.
 
 export default router;
