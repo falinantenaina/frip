@@ -251,7 +251,7 @@ const SectionTitle = ({ children }) => (
 const Rapports = () => {
   const [periode, setPeriode] = useState("month");
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("global");
+  const [activeTab, setActiveTab] = useState("benefices");
 
   const [data, setData] = useState(null);
   const [rapportParJour, setRapportParJour] = useState([]);
@@ -337,7 +337,6 @@ const Rapports = () => {
     })) || [];
 
   const TABS = [
-    
     { id: "benefices", label: "💰 Bénéfices" },
     { id: "global", label: "📊 Vue globale" },
     { id: "categories", label: "👟 Par catégorie" },
