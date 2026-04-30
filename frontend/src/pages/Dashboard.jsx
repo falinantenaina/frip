@@ -6,22 +6,12 @@ import {
   FaArrowUp,
   FaBox,
   FaChartLine,
-  FaDollarSign,
   FaPlus,
   FaShoppingBag,
   FaTruck,
   FaWarehouse,
 } from "react-icons/fa";
 import { Link } from "react-router-dom";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import useAppStore from "../stores/appStore";
 import useAuthStore from "../stores/authStore";
 import api from "../utils/api";
@@ -289,14 +279,8 @@ const Dashboard = () => {
           icon={<FaShoppingBag />}
           label="Ventes totales"
           value={stats.totalVentes}
-          sub={`CA : ${formatCurrency(stats.montantTotal)}`}
+          sub={`${formatCurrency(stats.montantTotal)}`}
           color="#2563eb"
-        />
-        <StatCard
-          icon={<FaDollarSign />}
-          label="Chiffre d'affaires"
-          value={formatCurrency(stats.montantTotal)}
-          color="#10b981"
         />
         <StatCard
           icon={<FaWarehouse />}
@@ -329,111 +313,6 @@ const Dashboard = () => {
           trend={beneficePositif ? "up" : "down"}
         />
       </div>
-
-      {/* ── Mini graphe 14 jours ── */}
-      {rapportJour.length > 0 && (
-        <div className="card" style={{ marginBottom: 20 }}>
-          <div className="card-header">
-            <h3 className="card-title">📊 Activité des 14 derniers jours</h3>
-          </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart
-              data={rapportJour}
-              margin={{ top: 4, right: 10, left: 10, bottom: 4 }}
-            >
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="#e2e8f0"
-                vertical={false}
-              />
-              <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-              <YAxis
-                tick={{ fontSize: 11 }}
-                tickFormatter={(v) =>
-                  v >= 1000000
-                    ? `${(v / 1000000).toFixed(1)}M`
-                    : v >= 1000
-                      ? `${(v / 1000).toFixed(0)}k`
-                      : v
-                }
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="Ventes" fill="#2563eb" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="Dépenses" fill="#ef4444" radius={[3, 3, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-
-      {/* ── Investisseur (si disponible) ── */}
-      {stats.investisseur && (
-        <div
-          className="card"
-          style={{
-            marginBottom: 20,
-            background: "linear-gradient(135deg, #fef3c7, #fff7ed)",
-            border: "1px solid #fde68a",
-          }}
-        >
-          <div className="card-header">
-            <h3 className="card-title">🤝 Suivi investisseur</h3>
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
-              gap: 12,
-            }}
-          >
-            {[
-              {
-                label: "Argent reçu",
-                val: stats.investisseur.totalRecu,
-                color: "#059669",
-                bg: "#f0fdf4",
-              },
-              {
-                label: "Argent versé",
-                val: stats.investisseur.totalVerse,
-                color: "#dc2626",
-                bg: "#fef2f2",
-              },
-              {
-                label:
-                  stats.investisseur.solde >= 0
-                    ? "Reste à rembourser"
-                    : "Surplus",
-                val: Math.abs(stats.investisseur.solde),
-                color: "#d97706",
-                bg: "#fffbeb",
-              },
-            ].map((s) => (
-              <div
-                key={s.label}
-                style={{
-                  background: s.bg,
-                  borderRadius: 10,
-                  padding: "12px 16px",
-                  textAlign: "center",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 12,
-                    color: "var(--secondary-color)",
-                    marginBottom: 4,
-                  }}
-                >
-                  {s.label}
-                </div>
-                <div style={{ fontSize: 17, fontWeight: 700, color: s.color }}>
-                  {formatCurrency(s.val)}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* ── Grille principale ── */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
