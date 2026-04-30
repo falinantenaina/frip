@@ -1,21 +1,6 @@
 import { endOfMonth, format, startOfMonth, subDays } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useEffect, useState } from "react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Legend,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import api from "../utils/api";
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -191,9 +176,7 @@ const BeneficeCard = ({
           fontSize: 13,
         }}
       >
-        <span style={{ color: "var(--secondary-color)" }}>
-          Chiffre d'affaires
-        </span>
+        <span style={{ color: "var(--secondary-color)" }}>Prix d'achats</span>
         <strong style={{ color: "var(--success-color)" }}>{fmtAR(ca)}</strong>
       </div>
       <div
@@ -340,8 +323,6 @@ const Rapports = () => {
     { id: "benefices", label: "💰 Bénéfices" },
     { id: "global", label: "📊 Vue globale" },
     { id: "categories", label: "👟 Par catégorie" },
-    { id: "periode", label: "📅 Période" },
-    { id: "semaine", label: "📆 Par semaine" },
     { id: "balle", label: "📦 Par balle" },
     { id: "expedition", label: "🚚 Expéditions" },
   ];
@@ -414,7 +395,7 @@ const Rapports = () => {
           >
             <KPI
               icon="💰"
-              label="Chiffre d'affaires total"
+              label="Prix d'achats total"
               value={fmtAR(g.ventes.montantVentes)}
               color="var(--primary-color)"
               sub={`${g.ventes.totalVentes} vente(s)`}
@@ -615,7 +596,7 @@ const Rapports = () => {
             </div>
           )}
 
-          {/* Détail CA et dépenses */}
+          {/* Détail  et dépenses */}
           <div
             style={{
               display: "grid",
@@ -761,7 +742,7 @@ const Rapports = () => {
             >
               {[
                 {
-                  label: "CA Total",
+                  label: " Total",
                   val: g.ventes.montantVentes,
                   positive: true,
                 },
@@ -940,12 +921,12 @@ const Rapports = () => {
                   <div style={{ display: "grid", gap: 8 }}>
                     {[
                       {
-                        label: "CA",
+                        label: "Ventes",
                         val: fmtAR(cat.montantVentes),
                         color: cfg.color,
                       },
                       {
-                        label: "Coût achat",
+                        label: "Prix achat",
                         val: fmtAR(cat.coutAchat),
                         color: "var(--danger-color)",
                       },
@@ -958,22 +939,9 @@ const Rapports = () => {
                             : "var(--danger-color)",
                       },
                       {
-                        label: "Nb produits",
+                        label: "Nb produits vendu",
                         val: cat.nombreProduits,
                         color: "var(--secondary-color)",
-                      },
-                      {
-                        label: "Nb ventes",
-                        val: cat.nombreVentes,
-                        color: "var(--secondary-color)",
-                      },
-                      marge !== null && {
-                        label: "Marge",
-                        val: `${marge}%`,
-                        color:
-                          parseFloat(marge) >= 0
-                            ? "var(--success-color)"
-                            : "var(--danger-color)",
                       },
                     ]
                       .filter(Boolean)
@@ -999,7 +967,7 @@ const Rapports = () => {
           </div>
 
           {/* Graphe comparatif */}
-          <div className="card" style={{ marginBottom: 20 }}>
+          {/*  <div className="card" style={{ marginBottom: 20 }}>
             <SectionTitle>📊 Comparaison par catégorie</SectionTitle>
             <ResponsiveContainer width="100%" height={260}>
               <BarChart
@@ -1027,7 +995,7 @@ const Rapports = () => {
                 <Bar
                   dataKey="montantVentes"
                   fill="#2563eb"
-                  name="CA"
+                  name="Ventes"
                   radius={[3, 3, 0, 0]}
                 />
                 <Bar
@@ -1044,10 +1012,10 @@ const Rapports = () => {
                 />
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </div> */}
 
           {/* Évolution mensuelle par catégorie */}
-          {rapportCategories.evolutionMensuelle?.length > 0 && (
+          {/* {rapportCategories.evolutionMensuelle?.length > 0 && (
             <div className="card" style={{ marginBottom: 20 }}>
               <SectionTitle>📈 Évolution mensuelle par catégorie</SectionTitle>
               <ResponsiveContainer width="100%" height={260}>
@@ -1092,7 +1060,7 @@ const Rapports = () => {
                 </LineChart>
               </ResponsiveContainer>
             </div>
-          )}
+          )} */}
 
           {/* Par destination */}
           {rapportCategories.parDestination?.length > 0 && (
@@ -1294,7 +1262,7 @@ const Rapports = () => {
           </div>
 
           {/* Dépenses par type (pie) */}
-          {depensesParType.length > 0 && (
+          {/*  {depensesParType.length > 0 && (
             <div className="card">
               <SectionTitle>💸 Répartition des dépenses</SectionTitle>
               <div
@@ -1375,270 +1343,15 @@ const Rapports = () => {
                 </div>
               </div>
             </div>
-          )}
+          )} */}
         </>
       )}
-
-      {/* ════════════════════════════════════════════════════
-          TAB : PÉRIODE (PAR JOUR)
-      ════════════════════════════════════════════════════ */}
-      {activeTab === "periode" && (
-        <>
-          {rapportParJour.length > 0 && (
-            <div className="card" style={{ marginBottom: 20 }}>
-              <SectionTitle>📅 Évolution journalière</SectionTitle>
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart
-                  data={rapportParJour}
-                  margin={{ top: 4, right: 10, left: 10, bottom: 4 }}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="#e2e8f0"
-                    vertical={false}
-                  />
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                  <YAxis
-                    tick={{ fontSize: 11 }}
-                    tickFormatter={(v) =>
-                      v >= 1000000
-                        ? `${(v / 1000000).toFixed(1)}M`
-                        : v >= 1000
-                          ? `${(v / 1000).toFixed(0)}k`
-                          : v
-                    }
-                  />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend />
-                  <Bar
-                    dataKey="montantVentes"
-                    fill="#2563eb"
-                    name="Ventes"
-                    radius={[3, 3, 0, 0]}
-                  />
-                  <Bar
-                    dataKey="depenses"
-                    fill="#ef4444"
-                    name="Dépenses"
-                    radius={[3, 3, 0, 0]}
-                  />
-                  <Bar
-                    dataKey="fraisExpedition"
-                    fill="#f59e0b"
-                    name="Frais expéd."
-                    radius={[3, 3, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-
-          <div className="table-container">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Nb ventes</th>
-                  <th>CA ventes</th>
-                  <th>Dépenses</th>
-                  <th>Frais expéd.</th>
-                  <th>Bénéfice</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[...rapportParJour].reverse().map((j) => (
-                  <tr key={j.date}>
-                    <td>{j.date}</td>
-                    <td>{j.ventes || 0}</td>
-                    <td className="text-success">{fmtAR(j.montantVentes)}</td>
-                    <td style={{ color: "var(--danger-color)" }}>
-                      {fmtAR(j.depenses)}
-                    </td>
-                    <td style={{ color: "var(--warning-color)" }}>
-                      {fmtAR(j.fraisExpedition)}
-                    </td>
-                    <td>
-                      <strong
-                        style={{
-                          color:
-                            (j.benefice || 0) >= 0
-                              ? "var(--success-color)"
-                              : "var(--danger-color)",
-                        }}
-                      >
-                        {fmtAR(j.benefice)}
-                      </strong>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-
-      {/* ════════════════════════════════════════════════════
-          TAB : PAR SEMAINE
-      ════════════════════════════════════════════════════ */}
-      {activeTab === "semaine" && (
-        <>
-          {rapportParSemaine.length > 0 ? (
-            <>
-              <div className="card" style={{ marginBottom: 20 }}>
-                <SectionTitle>📆 Évolution hebdomadaire</SectionTitle>
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart
-                    data={rapportParSemaine.map((s) => ({
-                      label: `S${s.semaine} ${s.annee}`,
-                      "Ventes (AR)": s.montantVentes,
-                      "Nb ventes": s.nombreVentes,
-                    }))}
-                    margin={{ top: 4, right: 10, left: 10, bottom: 4 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="#e2e8f0"
-                      vertical={false}
-                    />
-                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                    <YAxis
-                      yAxisId="left"
-                      tick={{ fontSize: 11 }}
-                      tickFormatter={(v) =>
-                        v >= 1000000
-                          ? `${(v / 1000000).toFixed(1)}M`
-                          : v >= 1000
-                            ? `${(v / 1000).toFixed(0)}k`
-                            : v
-                      }
-                    />
-                    <YAxis
-                      yAxisId="right"
-                      orientation="right"
-                      tick={{ fontSize: 11 }}
-                    />
-                    <Tooltip
-                      formatter={(v, name) =>
-                        name === "Nb ventes" ? v : fmtAR(v)
-                      }
-                    />
-                    <Legend />
-                    <Bar
-                      yAxisId="left"
-                      dataKey="Ventes (AR)"
-                      fill="#2563eb"
-                      radius={[3, 3, 0, 0]}
-                    />
-                    <Bar
-                      yAxisId="right"
-                      dataKey="Nb ventes"
-                      fill="#10b981"
-                      radius={[3, 3, 0, 0]}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-
-              <div className="table-container">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Année</th>
-                      <th>Semaine</th>
-                      <th>Nb ventes</th>
-                      <th>CA ventes</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[...rapportParSemaine].reverse().map((s, i) => (
-                      <tr key={i}>
-                        <td>{s.annee}</td>
-                        <td>Semaine {s.semaine}</td>
-                        <td>{s.nombreVentes}</td>
-                        <td className="text-success">
-                          <strong>{fmtAR(s.montantVentes)}</strong>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          ) : (
-            <p className="no-data">
-              Aucune donnée hebdomadaire pour cette période
-            </p>
-          )}
-        </>
-      )}
-
-      {/* ════════════════════════════════════════════════════
-          TAB : PAR MOIS (inclus dans semaine tab, séparé ici pour référence)
-          → Affichons-le dans le tab "periode" uniquement
-      ════════════════════════════════════════════════════ */}
 
       {/* ════════════════════════════════════════════════════
           TAB : PAR BALLE
       ════════════════════════════════════════════════════ */}
       {activeTab === "balle" && (
         <>
-          {rapportParBalle.length > 0 && (
-            <div className="card" style={{ marginBottom: 20 }}>
-              <SectionTitle>📦 Performance par balle (top 8)</SectionTitle>
-              <ResponsiveContainer width="100%" height={320}>
-                <BarChart
-                  data={rapportParBalle.slice(0, 8)}
-                  layout="vertical"
-                  margin={{ left: 90 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis
-                    type="number"
-                    tick={{ fontSize: 11 }}
-                    tickFormatter={(v) =>
-                      v >= 1000000
-                        ? `${(v / 1000000).toFixed(1)}M`
-                        : v >= 1000
-                          ? `${(v / 1000).toFixed(0)}k`
-                          : v
-                    }
-                  />
-                  <YAxis
-                    type="category"
-                    dataKey="nom"
-                    tick={{ fontSize: 11 }}
-                    width={90}
-                  />
-                  <Tooltip formatter={(v) => fmtAR(v)} />
-                  <Legend />
-                  <Bar
-                    dataKey="prixAchat"
-                    fill="#64748b"
-                    name="Achat"
-                    radius={[0, 4, 4, 0]}
-                  />
-                  <Bar
-                    dataKey="totalVentes"
-                    fill="#2563eb"
-                    name="Ventes"
-                    radius={[0, 4, 4, 0]}
-                  />
-                  <Bar
-                    dataKey="depenses"
-                    fill="#ef4444"
-                    name="Dépenses"
-                    radius={[0, 4, 4, 0]}
-                  />
-                  <Bar
-                    dataKey="benefice"
-                    fill="#10b981"
-                    name="Bénéfice"
-                    radius={[0, 4, 4, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
           <div className="table-container">
             <table className="data-table">
               <thead>
@@ -1818,44 +1531,6 @@ const Rapports = () => {
           )}
 
           {/* Graphe frais vs CA */}
-          {rapportExpeditions.statsParDestination?.length > 0 && (
-            <div className="card" style={{ marginBottom: 20 }}>
-              <SectionTitle>📊 CA vs Frais par destination</SectionTitle>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart
-                  data={rapportExpeditions.statsParDestination}
-                  margin={{ top: 4, right: 10, left: 10, bottom: 4 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="_id" tick={{ fontSize: 12 }} />
-                  <YAxis
-                    tick={{ fontSize: 11 }}
-                    tickFormatter={(v) =>
-                      v >= 1000000
-                        ? `${(v / 1000000).toFixed(1)}M`
-                        : v >= 1000
-                          ? `${(v / 1000).toFixed(0)}k`
-                          : v
-                    }
-                  />
-                  <Tooltip formatter={(v) => fmtAR(v)} />
-                  <Legend />
-                  <Bar
-                    dataKey="totalVentes"
-                    fill="#2563eb"
-                    name="CA expédié"
-                    radius={[3, 3, 0, 0]}
-                  />
-                  <Bar
-                    dataKey="totalFrais"
-                    fill="#ef4444"
-                    name="Frais réels"
-                    radius={[3, 3, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
 
           {/* Liste détaillée */}
           <div className="table-container">
