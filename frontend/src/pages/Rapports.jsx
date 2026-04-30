@@ -18,6 +18,7 @@ import {
 } from "recharts";
 import api from "../utils/api";
 
+// ── Constantes ────────────────────────────────────────────────────────────────
 const MOIS = [
   "",
   "Jan",
@@ -33,8 +34,10 @@ const MOIS = [
   "Nov",
   "Déc",
 ];
+
 const fmt = (n) => new Intl.NumberFormat("fr-FR").format(Math.round(n || 0));
 const fmtAR = (n) => fmt(n) + " AR";
+
 const PIE_COLORS = [
   "#2563eb",
   "#10b981",
@@ -44,7 +47,6 @@ const PIE_COLORS = [
   "#06b6d4",
 ];
 
-// Couleurs et labels des catégories
 const CAT_CONFIG = {
   chaussures: {
     label: "👟 Chaussures",
@@ -66,6 +68,7 @@ const CAT_CONFIG = {
   },
 };
 
+// ── Composants réutilisables ──────────────────────────────────────────────────
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
@@ -244,13 +247,16 @@ const SectionTitle = ({ children }) => (
   </h3>
 );
 
+// ── Composant principal ───────────────────────────────────────────────────────
 const Rapports = () => {
   const [periode, setPeriode] = useState("month");
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("global");
+
   const [data, setData] = useState(null);
   const [rapportParJour, setRapportParJour] = useState([]);
   const [rapportParMois, setRapportParMois] = useState([]);
+  const [rapportParSemaine, setRapportParSemaine] = useState([]);
   const [rapportParBalle, setRapportParBalle] = useState([]);
   const [rapportExpeditions, setRapportExpeditions] = useState(null);
   const [rapportCategories, setRapportCategories] = useState(null);
@@ -288,10 +294,11 @@ const Rapports = () => {
     setLoading(true);
     try {
       const p = getDateParams();
-      const [g, j, m, b, e, cat] = await Promise.all([
+      const [g, j, m, s, b, e, cat] = await Promise.all([
         api.get(`/rapports/global${p}`),
         api.get(`/rapports/par-jour${p}`),
         api.get(`/rapports/par-mois`),
+        api.get(`/rapports/par-semaine${p}`),
         api.get(`/rapports/par-balle`),
         api.get(`/rapports/expeditions${p}`),
         api.get(`/rapports/par-categorie${p}`),
@@ -299,6 +306,7 @@ const Rapports = () => {
       setData(g.data.data);
       setRapportParJour(j.data.data.slice(0, 30).reverse());
       setRapportParMois(m.data.data.slice(0, 12).reverse());
+      setRapportParSemaine(s.data.data.slice(0, 12).reverse());
       setRapportParBalle(b.data.data);
       setRapportExpeditions(e.data.data);
       setRapportCategories(cat.data.data);
@@ -320,6 +328,7 @@ const Rapports = () => {
 
   const g = data || {};
   const benefices = g.benefices || {};
+
   const depensesParType =
     g.depenses?.parType?.map((d, i) => ({
       name: d._id,
@@ -328,16 +337,19 @@ const Rapports = () => {
     })) || [];
 
   const TABS = [
+    
+    { id: "benefices", label: "💰 Bénéfices" },
     { id: "global", label: "📊 Vue globale" },
     { id: "categories", label: "👟 Par catégorie" },
-    { id: "benefices", label: "💰 Bénéfices" },
     { id: "periode", label: "📅 Période" },
+    { id: "semaine", label: "📆 Par semaine" },
     { id: "balle", label: "📦 Par balle" },
     { id: "expedition", label: "🚚 Expéditions" },
   ];
 
   return (
     <div className="main-content">
+      {/* ── En-tête ── */}
       <div className="page-header">
         <div>
           <h1 className="page-title">Rapports & Statistiques</h1>
@@ -358,7 +370,7 @@ const Rapports = () => {
         </select>
       </div>
 
-      {/* Tabs */}
+      {/* ── Tabs ── */}
       <div
         style={{ display: "flex", gap: 6, marginBottom: 24, flexWrap: "wrap" }}
       >
@@ -387,9 +399,12 @@ const Rapports = () => {
         ))}
       </div>
 
-      {/* ── TAB GLOBAL ── */}
+      {/* ════════════════════════════════════════════════════
+          TAB : VUE GLOBALE
+      ════════════════════════════════════════════════════ */}
       {activeTab === "global" && g.ventes && (
         <>
+          {/* KPI principaux */}
           <div
             style={{
               display: "grid",
@@ -433,7 +448,90 @@ const Rapports = () => {
             />
           </div>
 
-          {/* Résumé par catégorie dans la vue globale */}
+          {/* Répartition des ventes par type */}
+          <div className="card" style={{ marginBottom: 20 }}>
+            <SectionTitle>🏷️ Répartition des ventes par type</SectionTitle>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(3, 1fr)",
+                gap: 12,
+              }}
+            >
+              {[
+                {
+                  label: "📦 Ventes par balle",
+                  montant: g.ventes.parBalle?.montant || 0,
+                  count: g.ventes.parBalle?.count || 0,
+                  color: "#2563eb",
+                  bg: "#eff6ff",
+                },
+                {
+                  label: "🛒 Ventes libres",
+                  montant: g.ventes.libres?.montantVentes || 0,
+                  count: g.ventes.libres?.count || 0,
+                  benefice: g.ventes.libres?.benefice,
+                  color: "#059669",
+                  bg: "#f0fdf4",
+                },
+                {
+                  label: "✈️ Ventes expédiées",
+                  montant: g.ventes.expediees?.montant || 0,
+                  count: g.ventes.expediees?.count || 0,
+                  color: "#d97706",
+                  bg: "#fef3c7",
+                },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  style={{
+                    background: item.bg,
+                    borderRadius: 10,
+                    padding: "14px 16px",
+                    borderLeft: `4px solid ${item.color}`,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 700,
+                      color: item.color,
+                      marginBottom: 8,
+                    }}
+                  >
+                    {item.label}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 18,
+                      fontWeight: 700,
+                      color: "var(--dark-color)",
+                      marginBottom: 4,
+                    }}
+                  >
+                    {fmtAR(item.montant)}
+                  </div>
+                  <div
+                    style={{ fontSize: 12, color: "var(--secondary-color)" }}
+                  >
+                    {item.count} vente(s)
+                    {item.benefice !== undefined && (
+                      <span
+                        style={{
+                          color: item.benefice >= 0 ? "#059669" : "#dc2626",
+                          marginLeft: 8,
+                        }}
+                      >
+                        · Bén. {fmtAR(item.benefice)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Ventes par catégorie */}
           {rapportCategories?.statsParCategorie && (
             <div className="card" style={{ marginBottom: 20 }}>
               <SectionTitle>🏷️ Ventes par catégorie</SectionTitle>
@@ -518,6 +616,7 @@ const Rapports = () => {
             </div>
           )}
 
+          {/* Détail CA et dépenses */}
           <div
             style={{
               display: "grid",
@@ -527,43 +626,55 @@ const Rapports = () => {
             }}
           >
             <div className="card">
-              <SectionTitle>💰 Répartition des ventes</SectionTitle>
+              <SectionTitle>📊 Répartition du CA</SectionTitle>
               {[
                 {
-                  label: "Par balle",
+                  label: "Ventes par balle",
                   val: g.ventes.parBalle?.montant || 0,
-                  count: g.ventes.parBalle?.count || 0,
-                  color: "var(--primary-color)",
+                  color: PIE_COLORS[0],
                 },
                 {
-                  label: "Libres (fournisseur)",
+                  label: "Ventes libres",
                   val: g.ventes.libres?.montantVentes || 0,
-                  count: g.ventes.libres?.count || 0,
-                  color: "var(--success-color)",
+                  color: PIE_COLORS[1],
+                },
+                {
+                  label: "Frais livraison",
+                  val:
+                    (g.ventes.montantVentes || 0) -
+                    (g.ventes.parBalle?.montant || 0) -
+                    (g.ventes.libres?.montantVentes || 0),
+                  color: PIE_COLORS[2],
                 },
               ].map((item) => (
-                <div key={item.label} style={{ marginBottom: 14 }}>
+                <div key={item.label} style={{ marginBottom: 10 }}>
                   <div
                     style={{
                       display: "flex",
                       justifyContent: "space-between",
-                      marginBottom: 4,
                       fontSize: 13,
+                      marginBottom: 4,
                     }}
                   >
-                    <span>
-                      {item.label}{" "}
-                      <small style={{ color: "var(--secondary-color)" }}>
-                        ({item.count} vente{item.count > 1 ? "s" : ""})
-                      </small>
+                    <span
+                      style={{ display: "flex", alignItems: "center", gap: 6 }}
+                    >
+                      <span
+                        style={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: 2,
+                          background: item.color,
+                          display: "inline-block",
+                        }}
+                      />
+                      {item.label}
                     </span>
-                    <strong style={{ color: item.color }}>
-                      {fmtAR(item.val)}
-                    </strong>
+                    <strong>{fmtAR(item.val)}</strong>
                   </div>
                   <div
                     style={{
-                      background: "#e2e8f0",
+                      background: "var(--border-color)",
                       borderRadius: 999,
                       height: 6,
                     }}
@@ -573,8 +684,8 @@ const Rapports = () => {
                         height: 6,
                         borderRadius: 999,
                         background: item.color,
+                        width: `${g.ventes.montantVentes ? Math.min(100, Math.round((item.val / g.ventes.montantVentes) * 100)) : 0}%`,
                         transition: "width 0.5s",
-                        width: `${g.ventes.montantVentes ? Math.round((item.val / g.ventes.montantVentes) * 100) : 0}%`,
                       }}
                     />
                   </div>
@@ -639,8 +750,9 @@ const Rapports = () => {
             </div>
           </div>
 
+          {/* Bilan financier */}
           <div className="card" style={{ marginBottom: 20 }}>
-            <SectionTitle>📊 Bilan financier</SectionTitle>
+            <SectionTitle>📋 Bilan financier</SectionTitle>
             <div
               style={{
                 display: "grid",
@@ -655,13 +767,23 @@ const Rapports = () => {
                   positive: true,
                 },
                 {
-                  label: "− Dépenses",
-                  val: -(g.depenses?.totalDepenses || 0),
+                  label: "Bénéfice balles",
+                  val: benefices.balles,
+                  positive: true,
+                },
+                {
+                  label: "Bénéfice libres",
+                  val: benefices.libres,
+                  positive: true,
+                },
+                {
+                  label: "− Dépenses globales",
+                  val: -(g.depenses?.globales || 0),
                   positive: false,
                 },
                 {
                   label: "− Frais expéd.",
-                  val: -(g.expeditions?.totalFrais || 0),
+                  val: -(benefices.fraisExpeditions || 0),
                   positive: false,
                 },
                 {
@@ -700,20 +822,21 @@ const Rapports = () => {
                       fontSize: item.big ? 20 : 15,
                       fontWeight: 700,
                       color:
-                        item.val >= 0
+                        (item.val || 0) >= 0
                           ? item.positive
                             ? "var(--success-color)"
                             : "var(--dark-color)"
                           : "var(--danger-color)",
                     }}
                   >
-                    {fmtAR(Math.abs(item.val))}
+                    {fmtAR(Math.abs(item.val || 0))}
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
+          {/* Investisseur */}
           {g.investisseur && (
             <div className="card">
               <SectionTitle>🤝 Suivi investisseur</SectionTitle>
@@ -774,7 +897,9 @@ const Rapports = () => {
         </>
       )}
 
-      {/* ── TAB CATÉGORIES ── */}
+      {/* ════════════════════════════════════════════════════
+          TAB : CATÉGORIES
+      ════════════════════════════════════════════════════ */}
       {activeTab === "categories" && rapportCategories && (
         <>
           {/* KPI cards */}
@@ -798,8 +923,8 @@ const Rapports = () => {
                   style={{
                     background: "white",
                     borderRadius: 12,
-                    boxShadow: "var(--shadow)",
                     padding: 20,
+                    boxShadow: "var(--shadow)",
                     borderTop: `4px solid ${cfg.color}`,
                   }}
                 >
@@ -807,163 +932,116 @@ const Rapports = () => {
                     style={{
                       fontSize: 18,
                       fontWeight: 700,
-                      marginBottom: 12,
                       color: cfg.textColor,
+                      marginBottom: 12,
                     }}
                   >
                     {cfg.label}
                   </div>
-                  <div style={{ display: "grid", gap: 10 }}>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        fontSize: 13,
-                        padding: "6px 0",
-                        borderBottom: "1px solid var(--border-color)",
-                      }}
-                    >
-                      <span style={{ color: "var(--secondary-color)" }}>
-                        Chiffre d'affaires
-                      </span>
-                      <strong style={{ color: "var(--success-color)" }}>
-                        {fmtAR(cat.montantVentes)}
-                      </strong>
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        fontSize: 13,
-                        padding: "6px 0",
-                        borderBottom: "1px solid var(--border-color)",
-                      }}
-                    >
-                      <span style={{ color: "var(--secondary-color)" }}>
-                        Coût d'achat
-                      </span>
-                      <strong style={{ color: "var(--danger-color)" }}>
-                        {fmtAR(cat.coutAchat)}
-                      </strong>
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        fontSize: 13,
-                        padding: "6px 0",
-                        borderBottom: "1px solid var(--border-color)",
-                      }}
-                    >
-                      <span style={{ color: "var(--secondary-color)" }}>
-                        Nombre de produits
-                      </span>
-                      <strong>{cat.nombreProduits}</strong>
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        fontSize: 13,
-                        padding: "6px 0",
-                        borderBottom: "1px solid var(--border-color)",
-                      }}
-                    >
-                      <span style={{ color: "var(--secondary-color)" }}>
-                        Nombre de ventes
-                      </span>
-                      <strong>{cat.nombreVentes}</strong>
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        padding: "10px 0 0",
-                        borderTop: "2px solid var(--border-color)",
-                        fontWeight: 700,
-                      }}
-                    >
-                      <span>Bénéfice</span>
-                      <strong
-                        style={{
-                          fontSize: 18,
-                          color:
-                            cat.benefice >= 0
-                              ? "var(--success-color)"
-                              : "var(--danger-color)",
-                        }}
-                      >
-                        {fmtAR(cat.benefice)}
-                      </strong>
-                    </div>
-                    {marge && (
-                      <div
-                        style={{
-                          textAlign: "center",
-                          fontSize: 12,
-                          color: "var(--secondary-color)",
-                        }}
-                      >
-                        Marge :{" "}
-                        <strong
+                  <div style={{ display: "grid", gap: 8 }}>
+                    {[
+                      {
+                        label: "CA",
+                        val: fmtAR(cat.montantVentes),
+                        color: cfg.color,
+                      },
+                      {
+                        label: "Coût achat",
+                        val: fmtAR(cat.coutAchat),
+                        color: "var(--danger-color)",
+                      },
+                      {
+                        label: "Bénéfice",
+                        val: fmtAR(cat.benefice),
+                        color:
+                          cat.benefice >= 0
+                            ? "var(--success-color)"
+                            : "var(--danger-color)",
+                      },
+                      {
+                        label: "Nb produits",
+                        val: cat.nombreProduits,
+                        color: "var(--secondary-color)",
+                      },
+                      {
+                        label: "Nb ventes",
+                        val: cat.nombreVentes,
+                        color: "var(--secondary-color)",
+                      },
+                      marge !== null && {
+                        label: "Marge",
+                        val: `${marge}%`,
+                        color:
+                          parseFloat(marge) >= 0
+                            ? "var(--success-color)"
+                            : "var(--danger-color)",
+                      },
+                    ]
+                      .filter(Boolean)
+                      .map(({ label, val, color }) => (
+                        <div
+                          key={label}
                           style={{
-                            color:
-                              parseFloat(marge) >= 0
-                                ? "var(--success-color)"
-                                : "var(--danger-color)",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            fontSize: 13,
                           }}
                         >
-                          {marge}%
-                        </strong>
-                      </div>
-                    )}
+                          <span style={{ color: "var(--secondary-color)" }}>
+                            {label}
+                          </span>
+                          <strong style={{ color }}>{val}</strong>
+                        </div>
+                      ))}
                   </div>
                 </div>
               );
             })}
           </div>
 
-          {/* Graphique comparaison */}
+          {/* Graphe comparatif */}
           <div className="card" style={{ marginBottom: 20 }}>
-            <SectionTitle>
-              📊 Comparaison CA vs Bénéfice par catégorie
-            </SectionTitle>
-            <ResponsiveContainer width="100%" height={280}>
+            <SectionTitle>📊 Comparaison par catégorie</SectionTitle>
+            <ResponsiveContainer width="100%" height={260}>
               <BarChart
-                data={rapportCategories.statsParCategorie.map((cat) => ({
-                  name: {
-                    chaussures: "Chaussures",
-                    robes: "Robes",
-                    autres: "Autres",
-                  }[cat.categorie],
-                  CA: cat.montantVentes,
-                  "Coût achat": cat.coutAchat,
-                  Bénéfice: cat.benefice,
-                }))}
-                barSize={50}
+                data={rapportCategories.statsParCategorie}
+                margin={{ top: 4, right: 10, left: 10, bottom: 4 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="name" tick={{ fontSize: 13 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip content={<CustomTooltip />} />
+                <XAxis
+                  dataKey="categorie"
+                  tickFormatter={(v) => CAT_CONFIG[v]?.label || v}
+                  tick={{ fontSize: 12 }}
+                />
+                <YAxis
+                  tick={{ fontSize: 11 }}
+                  tickFormatter={(v) =>
+                    v >= 1000000
+                      ? `${(v / 1000000).toFixed(1)}M`
+                      : v >= 1000
+                        ? `${(v / 1000).toFixed(0)}k`
+                        : v
+                  }
+                />
+                <Tooltip formatter={(v) => fmtAR(v)} />
                 <Legend />
                 <Bar
-                  dataKey="CA"
+                  dataKey="montantVentes"
                   fill="#2563eb"
                   name="CA"
-                  radius={[4, 4, 0, 0]}
+                  radius={[3, 3, 0, 0]}
                 />
                 <Bar
-                  dataKey="Coût achat"
-                  fill="#ef4444"
+                  dataKey="coutAchat"
+                  fill="#64748b"
                   name="Coût achat"
-                  radius={[4, 4, 0, 0]}
+                  radius={[3, 3, 0, 0]}
                 />
                 <Bar
-                  dataKey="Bénéfice"
+                  dataKey="benefice"
                   fill="#10b981"
                   name="Bénéfice"
-                  radius={[4, 4, 0, 0]}
+                  radius={[3, 3, 0, 0]}
                 />
               </BarChart>
             </ResponsiveContainer>
@@ -972,119 +1050,290 @@ const Rapports = () => {
           {/* Évolution mensuelle par catégorie */}
           {rapportCategories.evolutionMensuelle?.length > 0 && (
             <div className="card" style={{ marginBottom: 20 }}>
-              <SectionTitle>📅 Évolution mensuelle par catégorie</SectionTitle>
-              <ResponsiveContainer width="100%" height={280}>
+              <SectionTitle>📈 Évolution mensuelle par catégorie</SectionTitle>
+              <ResponsiveContainer width="100%" height={260}>
                 <LineChart
                   data={(() => {
-                    const map = {};
-                    rapportCategories.evolutionMensuelle.forEach(
-                      ({ _id, montant }) => {
-                        const key = `${MOIS[_id.mois]} ${_id.annee}`;
-                        if (!map[key]) map[key] = { name: key };
-                        map[key][_id.categorie] =
-                          (map[key][_id.categorie] || 0) + montant;
-                      },
-                    );
-                    return Object.values(map).slice(-12);
+                    const map = new Map();
+                    rapportCategories.evolutionMensuelle.forEach((item) => {
+                      const key = `${item._id?.annee || "?"}-${MOIS[item._id?.mois || 0]}`;
+                      if (!map.has(key)) map.set(key, { period: key });
+                      const cat = item._id?.categorie || "autres";
+                      map.get(key)[cat] =
+                        (map.get(key)[cat] || 0) + (item.montant || 0);
+                    });
+                    return Array.from(map.values());
                   })()}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip content={<CustomTooltip />} />
+                  <XAxis dataKey="period" tick={{ fontSize: 11 }} />
+                  <YAxis
+                    tick={{ fontSize: 11 }}
+                    tickFormatter={(v) =>
+                      v >= 1000000
+                        ? `${(v / 1000000).toFixed(1)}M`
+                        : v >= 1000
+                          ? `${(v / 1000).toFixed(0)}k`
+                          : v
+                    }
+                  />
+                  <Tooltip formatter={(v) => fmtAR(v)} />
                   <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="chaussures"
-                    stroke="#2563eb"
-                    name="Chaussures"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="robes"
-                    stroke="#be185d"
-                    name="Robes"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="autres"
-                    stroke="#64748b"
-                    name="Autres"
-                    strokeWidth={2}
-                    dot={false}
-                  />
+                  {Object.keys(CAT_CONFIG).map((cat) => (
+                    <Line
+                      key={cat}
+                      type="monotone"
+                      dataKey={cat}
+                      name={CAT_CONFIG[cat].label}
+                      stroke={CAT_CONFIG[cat].color}
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  ))}
                 </LineChart>
               </ResponsiveContainer>
             </div>
           )}
 
-          {/* Répartition camembert */}
+          {/* Par destination */}
+          {rapportCategories.parDestination?.length > 0 && (
+            <div className="card">
+              <SectionTitle>🌍 Ventes par catégorie & destination</SectionTitle>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Catégorie</th>
+                    <th>Destination</th>
+                    <th>Montant</th>
+                    <th>Nb ventes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rapportCategories.parDestination.map((item, i) => {
+                    const cfg =
+                      CAT_CONFIG[item._id?.categorie] || CAT_CONFIG.autres;
+                    return (
+                      <tr key={i}>
+                        <td>
+                          <span
+                            style={{
+                              padding: "2px 10px",
+                              borderRadius: 12,
+                              fontSize: 12,
+                              fontWeight: 600,
+                              background: cfg.bg,
+                              color: cfg.textColor,
+                            }}
+                          >
+                            {cfg.label}
+                          </span>
+                        </td>
+                        <td>{item._id?.destination || "Local"}</td>
+                        <td className="text-success">
+                          <strong>{fmtAR(item.montant)}</strong>
+                        </td>
+                        <td>{item.count}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ════════════════════════════════════════════════════
+          TAB : BÉNÉFICES
+      ════════════════════════════════════════════════════ */}
+      {activeTab === "benefices" && g.ventes && (
+        <>
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "1fr 1fr",
+              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
               gap: 16,
+              marginBottom: 24,
+            }}
+          >
+            {/* Bénéfice ventes par balle */}
+            <BeneficeCard
+              titre="Ventes par balle"
+              icon="📦"
+              ca={g.balles?.totalVentes || 0}
+              charges={
+                (g.balles?.totalInvesti || 0) +
+                (g.balles?.totalDepensesLiees || 0)
+              }
+              chargesLabel="Achat + dépenses liées"
+              benefice={benefices.balles || 0}
+              color="#2563eb"
+            />
+            {/* Bénéfice ventes libres */}
+            <BeneficeCard
+              titre="Ventes libres"
+              icon="🛒"
+              ca={g.ventes.libres?.montantVentes || 0}
+              charges={g.ventes.libres?.coutAchat || 0}
+              chargesLabel="Coût d'achat produits"
+              benefice={benefices.libres || 0}
+              color="#10b981"
+            />
+            {/* Charges d'expéditions */}
+            <div
+              style={{
+                background: "white",
+                borderRadius: 12,
+                padding: 20,
+                boxShadow: "var(--shadow)",
+                borderTop: `3px solid #f59e0b`,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  marginBottom: 16,
+                }}
+              >
+                <span style={{ fontSize: 20 }}>🚚</span>
+                <strong style={{ fontSize: 16 }}>Frais expéditions</strong>
+              </div>
+              <div style={{ display: "grid", gap: 8 }}>
+                {[
+                  {
+                    label: "Frais colis",
+                    val: g.expeditions?.totalFraisColis || 0,
+                  },
+                  {
+                    label: "Commissionnaire",
+                    val: g.expeditions?.totalSalaireCommissionnaire || 0,
+                  },
+                ].map(({ label, val }) => (
+                  <div
+                    key={label}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      fontSize: 13,
+                    }}
+                  >
+                    <span style={{ color: "var(--secondary-color)" }}>
+                      {label}
+                    </span>
+                    <strong style={{ color: "var(--danger-color)" }}>
+                      − {fmtAR(val)}
+                    </strong>
+                  </div>
+                ))}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    padding: "10px 0 0",
+                    borderTop: "2px solid var(--border-color)",
+                    fontWeight: 700,
+                  }}
+                >
+                  <span>Total frais</span>
+                  <strong
+                    style={{ fontSize: 18, color: "var(--danger-color)" }}
+                  >
+                    {fmtAR(benefices.fraisExpeditions || 0)}
+                  </strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Résumé bénéfice net */}
+          <div
+            className="card"
+            style={{
+              background:
+                benefices.net >= 0
+                  ? "linear-gradient(135deg, #f0fdf4, #ecfdf5)"
+                  : "linear-gradient(135deg, #fef2f2, #fff1f2)",
+              border: `2px solid ${benefices.net >= 0 ? "var(--success-color)" : "var(--danger-color)"}`,
               marginBottom: 20,
             }}
           >
-            <div className="card">
-              <SectionTitle>🥧 Répartition du CA</SectionTitle>
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie
-                    data={rapportCategories.statsParCategorie
-                      .filter((c) => c.montantVentes > 0)
-                      .map((cat) => ({
-                        name: {
-                          chaussures: "Chaussures",
-                          robes: "Robes",
-                          autres: "Autres",
-                        }[cat.categorie],
-                        value: cat.montantVentes,
-                      }))}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                    dataKey="value"
-                    label={({ name, percent }) =>
-                      `${name} ${(percent * 100).toFixed(0)}%`
-                    }
-                  >
-                    {rapportCategories.statsParCategorie.map((cat, i) => (
-                      <Cell
-                        key={cat.categorie}
-                        fill={CAT_CONFIG[cat.categorie]?.color || PIE_COLORS[i]}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(v) => fmtAR(v)} />
-                </PieChart>
-              </ResponsiveContainer>
+            <div style={{ textAlign: "center", padding: "8px 0" }}>
+              <div
+                style={{
+                  fontSize: 15,
+                  color: "var(--secondary-color)",
+                  marginBottom: 4,
+                }}
+              >
+                Bénéfice net global
+              </div>
+              <div
+                style={{
+                  fontSize: 36,
+                  fontWeight: 800,
+                  color:
+                    benefices.net >= 0
+                      ? "var(--success-color)"
+                      : "var(--danger-color)",
+                }}
+              >
+                {fmtAR(benefices.net)}
+              </div>
+              <div
+                style={{
+                  fontSize: 13,
+                  color: "var(--secondary-color)",
+                  marginTop: 6,
+                }}
+              >
+                = Bénéf. balles ({fmtAR(benefices.balles)}) + Bénéf. libres (
+                {fmtAR(benefices.libres)}) − Dépenses globales − Frais expéd.
+              </div>
             </div>
+          </div>
 
+          {/* Dépenses par type (pie) */}
+          {depensesParType.length > 0 && (
             <div className="card">
-              <SectionTitle>💰 Bénéfice par catégorie</SectionTitle>
-              {rapportCategories.statsParCategorie.map((cat) => {
-                const cfg = CAT_CONFIG[cat.categorie] || CAT_CONFIG.autres;
-                const total = rapportCategories.statsParCategorie.reduce(
-                  (s, c) => s + Math.abs(c.benefice),
-                  0,
-                );
-                const pct =
-                  total > 0
-                    ? Math.abs((cat.benefice / total) * 100).toFixed(0)
-                    : 0;
-                return (
-                  <div key={cat.categorie} style={{ marginBottom: 14 }}>
+              <SectionTitle>💸 Répartition des dépenses</SectionTitle>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 20,
+                  alignItems: "center",
+                }}
+              >
+                <ResponsiveContainer width="100%" height={220}>
+                  <PieChart>
+                    <Pie
+                      data={depensesParType}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={90}
+                      dataKey="value"
+                      label={({ name, percent }) =>
+                        `${name} (${(percent * 100).toFixed(0)}%)`
+                      }
+                      labelLine={false}
+                    >
+                      {depensesParType.map((entry, index) => (
+                        <Cell key={index} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(v) => fmtAR(v)} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div style={{ display: "grid", gap: 8 }}>
+                  {depensesParType.map((d) => (
                     <div
+                      key={d.name}
                       style={{
                         display: "flex",
                         justifyContent: "space-between",
-                        marginBottom: 4,
+                        alignItems: "center",
                         fontSize: 13,
                       }}
                     >
@@ -1097,515 +1346,246 @@ const Rapports = () => {
                       >
                         <span
                           style={{
-                            width: 10,
-                            height: 10,
-                            borderRadius: 2,
-                            background: cfg.color,
+                            width: 12,
+                            height: 12,
+                            borderRadius: 3,
+                            background: d.color,
                             display: "inline-block",
+                            flexShrink: 0,
                           }}
                         />
-                        {cfg.label}
+                        {d.name}
                       </span>
-                      <strong
-                        style={{
-                          color:
-                            cat.benefice >= 0
-                              ? "var(--success-color)"
-                              : "var(--danger-color)",
-                        }}
-                      >
-                        {fmtAR(cat.benefice)}
-                      </strong>
+                      <strong>{fmtAR(d.value)}</strong>
                     </div>
-                    <div
-                      style={{
-                        background: "#e2e8f0",
-                        borderRadius: 999,
-                        height: 6,
-                      }}
-                    >
-                      <div
-                        style={{
-                          height: 6,
-                          borderRadius: 999,
-                          background:
-                            cat.benefice >= 0
-                              ? cfg.color
-                              : "var(--danger-color)",
-                          width: `${pct}%`,
-                        }}
-                      />
-                    </div>
+                  ))}
+                  <div
+                    style={{
+                      borderTop: "2px solid var(--border-color)",
+                      paddingTop: 8,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      fontWeight: 700,
+                    }}
+                  >
+                    <span>Total</span>
+                    <span style={{ color: "var(--danger-color)" }}>
+                      {fmtAR(g.depenses?.totalDepenses)}
+                    </span>
                   </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Par destination */}
-          {rapportCategories.parDestination?.length > 0 && (
-            <div className="card">
-              <SectionTitle>
-                🌍 Ventes par catégorie et destination
-              </SectionTitle>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Catégorie</th>
-                    <th>Destination</th>
-                    <th>Montant</th>
-                    <th>Produits</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rapportCategories.parDestination.map((row, i) => {
-                    const cfg =
-                      CAT_CONFIG[row._id?.categorie] || CAT_CONFIG.autres;
-                    return (
-                      <tr key={i}>
-                        <td>
-                          <span
-                            style={{
-                              padding: "3px 10px",
-                              borderRadius: 12,
-                              fontSize: 12,
-                              fontWeight: 600,
-                              background: cfg.bg,
-                              color: cfg.textColor,
-                            }}
-                          >
-                            {cfg.label}
-                          </span>
-                        </td>
-                        <td>
-                          <strong>{row._id?.destination || "Local"}</strong>
-                        </td>
-                        <td
-                          style={{
-                            color: "var(--success-color)",
-                            fontWeight: 600,
-                          }}
-                        >
-                          {fmtAR(row.montant)}
-                        </td>
-                        <td>{row.count}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* ── TAB BÉNÉFICES SÉPARÉS ── */}
-      {activeTab === "benefices" && g.benefices && (
-        <>
-          <div
-            style={{
-              background: "#eff6ff",
-              border: "1px solid #bfdbfe",
-              borderRadius: 8,
-              padding: "12px 16px",
-              marginBottom: 20,
-              fontSize: 13,
-              color: "#1d4ed8",
-            }}
-          >
-            💡 Les bénéfices sont calculés séparément selon le type de vente et
-            la catégorie de produit.
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-              gap: 16,
-              marginBottom: 24,
-            }}
-          >
-            <BeneficeCard
-              titre="Ventes par balle"
-              icon="📦"
-              ca={g.ventes?.parBalle?.montant || 0}
-              charges={
-                (g.balles?.totalInvesti || 0) +
-                (g.balles?.totalDepensesLiees || 0)
-              }
-              chargesLabel="Achat balles + dépenses liées"
-              benefice={benefices.balles || 0}
-              color="var(--primary-color)"
-            />
-            <BeneficeCard
-              titre="Ventes libres (fournisseur)"
-              icon="🛍️"
-              ca={g.ventes?.libres?.montantVentes || 0}
-              charges={g.ventes?.libres?.coutAchat || 0}
-              chargesLabel="Prix d'achat produits"
-              benefice={benefices.libres || 0}
-              color="var(--success-color)"
-            />
-            <BeneficeCard
-              titre="Expéditions (expédiées)"
-              icon="🚚"
-              ca={g.expeditions?.totalVentesExpediees || 0}
-              charges={g.expeditions?.totalFrais || 0}
-              chargesLabel="Frais colis + commissionnaire"
-              benefice={benefices.expeditions || 0}
-              color="#7c3aed"
-            />
-          </div>
-
-          {/* Bénéfices par catégorie */}
-          {rapportCategories?.statsParCategorie && (
-            <div className="card" style={{ marginBottom: 16 }}>
-              <SectionTitle>🏷️ Bénéfices par catégorie de produit</SectionTitle>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(3, 1fr)",
-                  gap: 12,
-                }}
-              >
-                {rapportCategories.statsParCategorie.map((cat) => {
-                  const cfg = CAT_CONFIG[cat.categorie] || CAT_CONFIG.autres;
-                  return (
-                    <div
-                      key={cat.categorie}
-                      style={{
-                        background: cfg.bg,
-                        borderRadius: 10,
-                        padding: 16,
-                        borderLeft: `4px solid ${cfg.color}`,
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontWeight: 700,
-                          color: cfg.textColor,
-                          marginBottom: 8,
-                          fontSize: 15,
-                        }}
-                      >
-                        {cfg.label}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 13,
-                          color: cfg.textColor,
-                          opacity: 0.8,
-                          marginBottom: 4,
-                        }}
-                      >
-                        CA : {fmtAR(cat.montantVentes)}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 13,
-                          color: cfg.textColor,
-                          opacity: 0.8,
-                          marginBottom: 8,
-                        }}
-                      >
-                        Coût : {fmtAR(cat.coutAchat)}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 20,
-                          fontWeight: 700,
-                          color: cat.benefice >= 0 ? "#166534" : "#991b1b",
-                        }}
-                      >
-                        {fmtAR(cat.benefice)}
-                      </div>
-                    </div>
-                  );
-                })}
+                </div>
               </div>
             </div>
           )}
-
-          <div className="card">
-            <SectionTitle>📊 Comparaison bénéfices par activité</SectionTitle>
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart
-                data={[
-                  {
-                    name: "Par balle",
-                    ca: g.ventes?.parBalle?.montant || 0,
-                    charges:
-                      (g.balles?.totalInvesti || 0) +
-                      (g.balles?.totalDepensesLiees || 0),
-                    benefice: benefices.balles || 0,
-                  },
-                  {
-                    name: "Libres",
-                    ca: g.ventes?.libres?.montantVentes || 0,
-                    charges: g.ventes?.libres?.coutAchat || 0,
-                    benefice: benefices.libres || 0,
-                  },
-                  {
-                    name: "Expéditions",
-                    ca: g.expeditions?.totalVentesExpediees || 0,
-                    charges: g.expeditions?.totalFrais || 0,
-                    benefice: benefices.expeditions || 0,
-                  },
-                ]}
-                barSize={50}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="name" tick={{ fontSize: 13 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend />
-                <Bar
-                  dataKey="ca"
-                  fill="#2563eb"
-                  name="CA"
-                  radius={[4, 4, 0, 0]}
-                />
-                <Bar
-                  dataKey="charges"
-                  fill="#ef4444"
-                  name="Charges"
-                  radius={[4, 4, 0, 0]}
-                />
-                <Bar
-                  dataKey="benefice"
-                  fill="#10b981"
-                  name="Bénéfice"
-                  radius={[4, 4, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="card" style={{ marginTop: 16 }}>
-            <SectionTitle>🏆 Bénéfice net consolidé</SectionTitle>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-                gap: 12,
-              }}
-            >
-              {[
-                {
-                  label: "Bénéfice balles",
-                  val: benefices.balles || 0,
-                  color: "var(--primary-color)",
-                },
-                {
-                  label: "Bénéfice libres",
-                  val: benefices.libres || 0,
-                  color: "var(--success-color)",
-                },
-                {
-                  label: "Bénéfice expéd.",
-                  val: benefices.expeditions || 0,
-                  color: "#7c3aed",
-                },
-                {
-                  label: "− Dépenses globales",
-                  val: -(g.depenses?.globales || 0),
-                  color: "var(--danger-color)",
-                },
-                {
-                  label: "= Net total",
-                  val: benefices.net || 0,
-                  color:
-                    benefices.net >= 0
-                      ? "var(--success-color)"
-                      : "var(--danger-color)",
-                  big: true,
-                },
-              ].map((item) => (
-                <div
-                  key={item.label}
-                  style={{
-                    background: item.big
-                      ? item.val >= 0
-                        ? "#f0fdf4"
-                        : "#fef2f2"
-                      : "var(--light-color)",
-                    borderRadius: 8,
-                    padding: "12px 14px",
-                    border: item.big ? `2px solid ${item.color}` : "none",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: 11,
-                      color: "var(--secondary-color)",
-                      marginBottom: 4,
-                    }}
-                  >
-                    {item.label}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: item.big ? 20 : 15,
-                      fontWeight: 700,
-                      color: item.color,
-                    }}
-                  >
-                    {fmtAR(Math.abs(item.val))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         </>
       )}
 
-      {/* ── TAB PÉRIODE ── */}
+      {/* ════════════════════════════════════════════════════
+          TAB : PÉRIODE (PAR JOUR)
+      ════════════════════════════════════════════════════ */}
       {activeTab === "periode" && (
         <>
           {rapportParJour.length > 0 && (
             <div className="card" style={{ marginBottom: 20 }}>
               <SectionTitle>📅 Évolution journalière</SectionTitle>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={rapportParJour}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="montantVentes"
-                    stroke="#2563eb"
-                    name="Ventes"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="depenses"
-                    stroke="#ef4444"
-                    name="Dépenses"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="fraisExpedition"
-                    stroke="#f59e0b"
-                    name="Frais expéd."
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="benefice"
-                    stroke="#10b981"
-                    name="Bénéfice"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-
-          {rapportParMois.length > 0 && (
-            <div className="card">
-              <SectionTitle>📆 Évolution mensuelle</SectionTitle>
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart
-                  data={rapportParMois.map((m) => ({
-                    ...m,
-                    label: `${MOIS[m.mois]} ${m.annee}`,
-                  }))}
+                  data={rapportParJour}
+                  margin={{ top: 4, right: 10, left: 10, bottom: 4 }}
                 >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="#e2e8f0"
+                    vertical={false}
+                  />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                  <YAxis
+                    tick={{ fontSize: 11 }}
+                    tickFormatter={(v) =>
+                      v >= 1000000
+                        ? `${(v / 1000000).toFixed(1)}M`
+                        : v >= 1000
+                          ? `${(v / 1000).toFixed(0)}k`
+                          : v
+                    }
+                  />
                   <Tooltip content={<CustomTooltip />} />
                   <Legend />
                   <Bar
                     dataKey="montantVentes"
                     fill="#2563eb"
                     name="Ventes"
-                    radius={[4, 4, 0, 0]}
+                    radius={[3, 3, 0, 0]}
                   />
                   <Bar
                     dataKey="depenses"
                     fill="#ef4444"
                     name="Dépenses"
-                    radius={[4, 4, 0, 0]}
+                    radius={[3, 3, 0, 0]}
                   />
                   <Bar
                     dataKey="fraisExpedition"
                     fill="#f59e0b"
                     name="Frais expéd."
-                    radius={[4, 4, 0, 0]}
-                  />
-                  <Bar
-                    dataKey="benefice"
-                    fill="#10b981"
-                    name="Bénéfice"
-                    radius={[4, 4, 0, 0]}
+                    radius={[3, 3, 0, 0]}
                   />
                 </BarChart>
               </ResponsiveContainer>
-              <div className="table-container" style={{ marginTop: 16 }}>
+            </div>
+          )}
+
+          <div className="table-container">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Nb ventes</th>
+                  <th>CA ventes</th>
+                  <th>Dépenses</th>
+                  <th>Frais expéd.</th>
+                  <th>Bénéfice</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...rapportParJour].reverse().map((j) => (
+                  <tr key={j.date}>
+                    <td>{j.date}</td>
+                    <td>{j.ventes || 0}</td>
+                    <td className="text-success">{fmtAR(j.montantVentes)}</td>
+                    <td style={{ color: "var(--danger-color)" }}>
+                      {fmtAR(j.depenses)}
+                    </td>
+                    <td style={{ color: "var(--warning-color)" }}>
+                      {fmtAR(j.fraisExpedition)}
+                    </td>
+                    <td>
+                      <strong
+                        style={{
+                          color:
+                            (j.benefice || 0) >= 0
+                              ? "var(--success-color)"
+                              : "var(--danger-color)",
+                        }}
+                      >
+                        {fmtAR(j.benefice)}
+                      </strong>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {/* ════════════════════════════════════════════════════
+          TAB : PAR SEMAINE
+      ════════════════════════════════════════════════════ */}
+      {activeTab === "semaine" && (
+        <>
+          {rapportParSemaine.length > 0 ? (
+            <>
+              <div className="card" style={{ marginBottom: 20 }}>
+                <SectionTitle>📆 Évolution hebdomadaire</SectionTitle>
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart
+                    data={rapportParSemaine.map((s) => ({
+                      label: `S${s.semaine} ${s.annee}`,
+                      "Ventes (AR)": s.montantVentes,
+                      "Nb ventes": s.nombreVentes,
+                    }))}
+                    margin={{ top: 4, right: 10, left: 10, bottom: 4 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="#e2e8f0"
+                      vertical={false}
+                    />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <YAxis
+                      yAxisId="left"
+                      tick={{ fontSize: 11 }}
+                      tickFormatter={(v) =>
+                        v >= 1000000
+                          ? `${(v / 1000000).toFixed(1)}M`
+                          : v >= 1000
+                            ? `${(v / 1000).toFixed(0)}k`
+                            : v
+                      }
+                    />
+                    <YAxis
+                      yAxisId="right"
+                      orientation="right"
+                      tick={{ fontSize: 11 }}
+                    />
+                    <Tooltip
+                      formatter={(v, name) =>
+                        name === "Nb ventes" ? v : fmtAR(v)
+                      }
+                    />
+                    <Legend />
+                    <Bar
+                      yAxisId="left"
+                      dataKey="Ventes (AR)"
+                      fill="#2563eb"
+                      radius={[3, 3, 0, 0]}
+                    />
+                    <Bar
+                      yAxisId="right"
+                      dataKey="Nb ventes"
+                      fill="#10b981"
+                      radius={[3, 3, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="table-container">
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>Mois</th>
-                      <th>Ventes</th>
-                      <th>Dépenses</th>
-                      <th>Frais expéd.</th>
-                      <th>Bénéfice</th>
+                      <th>Année</th>
+                      <th>Semaine</th>
+                      <th>Nb ventes</th>
+                      <th>CA ventes</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {rapportParMois.map((m) => (
-                      <tr key={`${m.annee}-${m.mois}`}>
-                        <td>
-                          <strong>
-                            {MOIS[m.mois]} {m.annee}
-                          </strong>
-                        </td>
-                        <td style={{ color: "var(--success-color)" }}>
-                          {fmtAR(m.montantVentes)}
-                        </td>
-                        <td style={{ color: "var(--danger-color)" }}>
-                          {fmtAR(m.depenses)}
-                        </td>
-                        <td style={{ color: "var(--warning-color)" }}>
-                          {fmtAR(m.fraisExpedition || 0)}
-                        </td>
-                        <td>
-                          <strong
-                            style={{
-                              color:
-                                m.benefice >= 0
-                                  ? "var(--success-color)"
-                                  : "var(--danger-color)",
-                            }}
-                          >
-                            {fmtAR(m.benefice)}
-                          </strong>
+                    {[...rapportParSemaine].reverse().map((s, i) => (
+                      <tr key={i}>
+                        <td>{s.annee}</td>
+                        <td>Semaine {s.semaine}</td>
+                        <td>{s.nombreVentes}</td>
+                        <td className="text-success">
+                          <strong>{fmtAR(s.montantVentes)}</strong>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            </div>
+            </>
+          ) : (
+            <p className="no-data">
+              Aucune donnée hebdomadaire pour cette période
+            </p>
           )}
         </>
       )}
 
-      {/* ── TAB BALLE ── */}
+      {/* ════════════════════════════════════════════════════
+          TAB : PAR MOIS (inclus dans semaine tab, séparé ici pour référence)
+          → Affichons-le dans le tab "periode" uniquement
+      ════════════════════════════════════════════════════ */}
+
+      {/* ════════════════════════════════════════════════════
+          TAB : PAR BALLE
+      ════════════════════════════════════════════════════ */}
       {activeTab === "balle" && (
         <>
           {rapportParBalle.length > 0 && (
             <div className="card" style={{ marginBottom: 20 }}>
-              <SectionTitle>📦 Performance par balle</SectionTitle>
+              <SectionTitle>📦 Performance par balle (top 8)</SectionTitle>
               <ResponsiveContainer width="100%" height={320}>
                 <BarChart
                   data={rapportParBalle.slice(0, 8)}
@@ -1613,7 +1593,17 @@ const Rapports = () => {
                   margin={{ left: 90 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis type="number" tick={{ fontSize: 11 }} />
+                  <XAxis
+                    type="number"
+                    tick={{ fontSize: 11 }}
+                    tickFormatter={(v) =>
+                      v >= 1000000
+                        ? `${(v / 1000000).toFixed(1)}M`
+                        : v >= 1000
+                          ? `${(v / 1000).toFixed(0)}k`
+                          : v
+                    }
+                  />
                   <YAxis
                     type="category"
                     dataKey="nom"
@@ -1661,6 +1651,7 @@ const Rapports = () => {
                   <th>Dépenses</th>
                   <th>Bénéfice</th>
                   <th>Marge</th>
+                  <th>Statut</th>
                 </tr>
               </thead>
               <tbody>
@@ -1708,6 +1699,20 @@ const Rapports = () => {
                           {marge}%
                         </strong>
                       </td>
+                      <td>
+                        <span
+                          className={`status-badge ${
+                            {
+                              en_stock: "disponible",
+                              en_vente: "en_cours",
+                              vendu: "vendu",
+                              archivé: "annule",
+                            }[b.statut] || "disponible"
+                          }`}
+                        >
+                          {b.statut?.replace("_", " ")}
+                        </span>
+                      </td>
                     </tr>
                   );
                 })}
@@ -1717,9 +1722,12 @@ const Rapports = () => {
         </>
       )}
 
-      {/* ── TAB EXPÉDITIONS ── */}
+      {/* ════════════════════════════════════════════════════
+          TAB : EXPÉDITIONS
+      ════════════════════════════════════════════════════ */}
       {activeTab === "expedition" && rapportExpeditions && (
         <>
+          {/* Stats par destination */}
           {rapportExpeditions.statsParDestination?.length > 0 && (
             <div
               style={{
@@ -1759,7 +1767,7 @@ const Rapports = () => {
                         bg: "#eff6ff",
                       },
                       {
-                        label: "Produits",
+                        label: "Ventes",
                         val: d.totalProduits,
                         color: "var(--warning-color)",
                         bg: "#fef3c7",
@@ -1810,6 +1818,47 @@ const Rapports = () => {
             </div>
           )}
 
+          {/* Graphe frais vs CA */}
+          {rapportExpeditions.statsParDestination?.length > 0 && (
+            <div className="card" style={{ marginBottom: 20 }}>
+              <SectionTitle>📊 CA vs Frais par destination</SectionTitle>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart
+                  data={rapportExpeditions.statsParDestination}
+                  margin={{ top: 4, right: 10, left: 10, bottom: 4 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="_id" tick={{ fontSize: 12 }} />
+                  <YAxis
+                    tick={{ fontSize: 11 }}
+                    tickFormatter={(v) =>
+                      v >= 1000000
+                        ? `${(v / 1000000).toFixed(1)}M`
+                        : v >= 1000
+                          ? `${(v / 1000).toFixed(0)}k`
+                          : v
+                    }
+                  />
+                  <Tooltip formatter={(v) => fmtAR(v)} />
+                  <Legend />
+                  <Bar
+                    dataKey="totalVentes"
+                    fill="#2563eb"
+                    name="CA expédié"
+                    radius={[3, 3, 0, 0]}
+                  />
+                  <Bar
+                    dataKey="totalFrais"
+                    fill="#ef4444"
+                    name="Frais réels"
+                    radius={[3, 3, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Liste détaillée */}
           <div className="table-container">
             <table className="data-table">
               <thead>
@@ -1817,19 +1866,20 @@ const Rapports = () => {
                   <th>Date</th>
                   <th>Nom</th>
                   <th>Destination</th>
-                  <th>Produits</th>
+                  <th>Ventes</th>
                   <th>CA</th>
                   <th>Frais colis</th>
                   <th>Commission</th>
                   <th>Total frais</th>
                   <th>Net</th>
+                  <th>Statut</th>
                 </tr>
               </thead>
               <tbody>
                 {rapportExpeditions.expeditions?.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="no-data">
-                      Aucune expédition expédiée sur cette période
+                    <td colSpan={10} className="no-data">
+                      Aucune expédition sur cette période
                     </td>
                   </tr>
                 ) : (
@@ -1842,7 +1892,7 @@ const Rapports = () => {
                         <strong>{e.nom}</strong>
                       </td>
                       <td>{e.destination}</td>
-                      <td>{e.produits?.length || 0}</td>
+                      <td>{e.ventes?.length || 0}</td>
                       <td style={{ color: "var(--success-color)" }}>
                         {fmtAR(e.totalVentes)}
                       </td>
@@ -1863,13 +1913,27 @@ const Rapports = () => {
                         <strong
                           style={{
                             color:
-                              e.totalVentes - e.totalFrais >= 0
+                              (e.benefice ?? e.totalVentes - e.totalFrais) >= 0
                                 ? "var(--success-color)"
                                 : "var(--danger-color)",
                           }}
                         >
-                          {fmtAR(e.totalVentes - e.totalFrais)}
+                          {fmtAR(e.benefice ?? e.totalVentes - e.totalFrais)}
                         </strong>
+                      </td>
+                      <td>
+                        <span
+                          className={`status-badge ${
+                            {
+                              en_preparation: "en_attente",
+                              expédiée: "en_cours",
+                              livrée: "livre",
+                              annulée: "annule",
+                            }[e.statut] || "en_attente"
+                          }`}
+                        >
+                          {e.statut}
+                        </span>
                       </td>
                     </tr>
                   ))

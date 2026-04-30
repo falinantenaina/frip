@@ -82,42 +82,6 @@ export const getRapportGlobal = async (req, res, next) => {
       ]);
 
     // ── Ventes par catégorie (global) ────────────────────────────────────────
-    const ventesParCategorie = await Vente.aggregate([
-      { $match: venteMatch },
-      { $unwind: { path: "$produits", preserveNullAndEmptyArrays: true } },
-      {
-        $group: {
-          _id: {
-            $cond: {
-              if: {
-                $gt: [
-                  {
-                    $size: {
-                      $cond: [{ $isArray: "$produits" }, "$produits", []],
-                    },
-                  },
-                  0,
-                ],
-              },
-              then: { $ifNull: ["$produits.categorie", "autres"] },
-              else: { $ifNull: ["$categorie", "autres"] },
-            },
-          },
-          montant: {
-            $sum: {
-              $ifNull: ["$produits.prixVente", "$prixVente"],
-            },
-          },
-          count: { $sum: 1 },
-          coutAchat: {
-            $sum: { $ifNull: ["$produits.prixAchat", 0] },
-          },
-        },
-      },
-      { $sort: { montant: -1 } },
-    ]);
-
-    // Regroupement propre par catégorie depuis les sous-produits
     const catStats = await Vente.aggregate([
       { $match: venteMatch },
       { $unwind: { path: "$produits", preserveNullAndEmptyArrays: false } },
@@ -132,7 +96,6 @@ export const getRapportGlobal = async (req, res, next) => {
       { $sort: { montant: -1 } },
     ]);
 
-    // Stats également des ventes sans sous-produits (typeVente = balle ancien format)
     const catStatsVenteDirecte = await Vente.aggregate([
       {
         $match: {
@@ -150,7 +113,6 @@ export const getRapportGlobal = async (req, res, next) => {
       },
     ]);
 
-    // Fusion
     const catMap = {};
     [...catStats, ...catStatsVenteDirecte].forEach(
       ({ _id, montant, coutAchat, count }) => {
@@ -209,7 +171,7 @@ export const getRapportGlobal = async (req, res, next) => {
             totalFraisColis: { $sum: "$fraisColis" },
             totalSalaireCommissionnaire: { $sum: "$salaireCommissionnaire" },
             totalFrais: { $sum: "$totalFrais" },
-            totalProduits: { $sum: { $size: "$produits" } },
+            // totalProduits: { $sum: { $size: "$produits" } },
             totalVentesExpediees: { $sum: "$totalVentes" },
           },
         },
@@ -289,12 +251,36 @@ export const getRapportGlobal = async (req, res, next) => {
     };
     const balleData = ventesBalle[0] || { montant: 0, count: 0 };
 
+    // ── CALCUL DU BÉNÉFICE CORRIGÉ ──────────────────────────────────────────
+    //
+    // Règle métier :
+    //   • Ventes "balle"  : le bénéfice réel est déjà calculé dans chaque
+    //     document Balle (totalVentes - prixAchat - depensesLiees).
+    //     On utilise balles.totalBenefice — PAS le CA brut des ventes.
+    //
+    //   • Ventes "libre"  : bénéfice = prixVente - prixAchat (par produit).
+    //
+    //   • Expéditions : elles regroupent des ventes déjà comptées ci-dessus.
+    //     Elles n'apportent pas de CA supplémentaire, elles ajoutent uniquement
+    //     des frais (colis + commissionnaire) qui viennent réduire le bénéfice.
+    //
+    //   • Dépenses globales (non liées à une balle) : charges générales.
+    //     Les dépenses liées aux balles sont déjà dans balles.totalBenefice.
+    //
+    // Formule :
+    //   bénéficeNet = beneficeBalles + beneficeLibres
+    //               - dépensesGlobales - fraisExpéditions
+
     const beneficeBalles = balles.totalBenefice;
     const beneficeLibres = libresData.montantVentes - libresData.coutAchat;
-    const beneficeExpeditions =
-      expeditions.totalVentesExpediees - expeditions.totalFrais;
-    const totalCharges = depenses.totalDepenses + expeditions.totalFrais;
-    const beneficeNet = ventes.montantVentes - totalCharges;
+    const fraisExpeditions = expeditions.totalFrais || 0;
+    const depensesGlobalesAmount = depensesGlobales[0]?.total || 0;
+    const totalCharges = depenses.totalDepenses + fraisExpeditions;
+    const beneficeNet =
+      beneficeBalles +
+      beneficeLibres -
+      depensesGlobalesAmount -
+      fraisExpeditions;
 
     res.status(200).json({
       success: true,
@@ -317,7 +303,8 @@ export const getRapportGlobal = async (req, res, next) => {
         benefices: {
           balles: beneficeBalles,
           libres: beneficeLibres,
-          expeditions: beneficeExpeditions,
+          // fraisExpeditions : montant des frais d'expédition (coût pur, non un bénéfice)
+          fraisExpeditions: fraisExpeditions,
           net: beneficeNet,
           parCategorie: categoriesStats.reduce((acc, c) => {
             acc[c.categorie] = c.benefice;
@@ -335,6 +322,7 @@ export const getRapportGlobal = async (req, res, next) => {
       },
     });
   } catch (error) {
+    console.log(error);
     next(error);
   }
 };
@@ -351,7 +339,6 @@ export const getRapportParCategorie = async (req, res, next) => {
 
     const CATEGORIES = ["chaussures", "robes", "autres"];
 
-    // Stats globales par catégorie depuis les sous-produits
     const statsProduitsDetail = await Vente.aggregate([
       { $match: venteMatch },
       { $unwind: { path: "$produits", preserveNullAndEmptyArrays: false } },
@@ -379,7 +366,6 @@ export const getRapportParCategorie = async (req, res, next) => {
       { $sort: { montantVentes: -1 } },
     ]);
 
-    // Évolution mensuelle par catégorie
     const evolutionMensuelle = await Vente.aggregate([
       { $match: venteMatch },
       { $unwind: { path: "$produits", preserveNullAndEmptyArrays: false } },
@@ -397,7 +383,6 @@ export const getRapportParCategorie = async (req, res, next) => {
       { $sort: { "_id.annee": 1, "_id.mois": 1 } },
     ]);
 
-    // Destination par catégorie
     const parDestination = await Vente.aggregate([
       { $match: venteMatch },
       { $unwind: { path: "$produits", preserveNullAndEmptyArrays: false } },
@@ -414,7 +399,6 @@ export const getRapportParCategorie = async (req, res, next) => {
       { $sort: { montant: -1 } },
     ]);
 
-    // Assurer que les 3 catégories sont présentes même avec 0
     const statsParCategorie = CATEGORIES.map((cat) => {
       const found = statsProduitsDetail.find(
         (s) => s._id?.categorie === cat || s.categorie === cat,
@@ -755,7 +739,7 @@ export const getRapportExpeditions = async (req, res, next) => {
         $group: {
           _id: "$destination",
           totalExpeditions: { $sum: 1 },
-          totalProduits: { $sum: { $size: "$produits" } },
+          // totalProduits: { $sum: { $size: "$produits" } },
           totalFraisColis: { $sum: "$fraisColis" },
           totalSalaire: { $sum: "$salaireCommissionnaire" },
           totalFrais: { $sum: "$totalFrais" },
