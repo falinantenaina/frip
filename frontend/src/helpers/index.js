@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import { fr } from "date-fns/locale";
 
 export const formatCurrency = (amount) =>
   new Intl.NumberFormat("fr-FR").format(amount) + " AR";
@@ -16,6 +17,10 @@ export const getPeriodeLabel = () => {
     });
   return null;
 };
+
+export const fmt = (n) => new Intl.NumberFormat("fr-FR").format(n) + " AR";
+
+export const fmtDate = (d) => format(new Date(d), "dd/MM/yyyy", { locale: fr });
 
 export const getStatutClass = (s) =>
   ({
