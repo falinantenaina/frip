@@ -8,11 +8,12 @@ import {
 } from "date-fns";
 import { useEffect, useState } from "react";
 import { FaPlus } from "react-icons/fa";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
 import { VenteCard } from "../components/ventes/VenteCard";
+import { VenteSummary } from "../components/ventes/VenteSummary";
 import { VenteTable } from "../components/ventes/VenteTable";
-import { fmt, getStatutLabel } from "../helpers";
+import { getStatutLabel } from "../helpers";
 import useAppStore from "../stores/appStore";
 
 const Ventes = () => {
@@ -25,7 +26,6 @@ const Ventes = () => {
     updateVente,
     supprimerProduit,
   } = useAppStore();
-  const navigate = useNavigate();
   const [filterStatut, setFilterStatut] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterPeriode, setFilterPeriode] = useState("tous");
@@ -98,11 +98,6 @@ const Ventes = () => {
       ? toast.success("Produit retiré")
       : toast.error(r.message || "Erreur");
   };
-
-  // Vente groupée = plusieurs sous-produits
-  const isGroupee = (v) => v.produits && v.produits.length > 1;
-  // Vente avec exactement 1 sous-produit modifiable
-  const hasSingleProduit = (v) => v.produits && v.produits.length === 1;
 
   const filteredVentes = ventes.filter((v) => {
     if (searchTerm) {
@@ -248,28 +243,10 @@ const Ventes = () => {
       </div>
 
       {/* Résumé période */}
-      {filterPeriode !== "tous" && (
-        <div
-          style={{
-            background: "#eff6ff",
-            border: "1px solid #bfdbfe",
-            borderRadius: 8,
-            padding: "10px 16px",
-            marginBottom: 16,
-            display: "flex",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: 6,
-          }}
-        >
-          <span style={{ fontSize: 13, color: "#1d4ed8" }}>
-            <strong>{filteredVentes.length}</strong> vente(s)
-          </span>
-          <span style={{ fontSize: 13, color: "#1d4ed8", fontWeight: 700 }}>
-            Total : {fmt(totalFiltre)}
-          </span>
-        </div>
-      )}
+      <VenteSummary
+        filteredVentes={filteredVentes}
+        filterPeriode={filterPeriode}
+      />
 
       {filteredVentes.length === 0 ? (
         <div className="table-container">
