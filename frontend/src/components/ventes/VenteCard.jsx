@@ -100,21 +100,28 @@ export const VenteCard = ({
               {vente.telephoneClient} · {fmtDate(vente.dateVente)}
             </div>
           </div>
-          <button
-            className={`status-badge ${getStatutClass(vente.statutLivraison)}`}
-            onClick={() => onChangeStatut(vente._id, vente.statutLivraison)}
-            style={{
-              cursor:
-                vente.statutLivraison === "annulé" ? "not-allowed" : "pointer",
-              border: "none",
-              flexShrink: 0,
-              marginLeft: 8,
-              opacity: vente.statutLivraison === "annulé" ? 0.6 : 1,
-            }}
-            disabled={vente.statutLivraison === "annulé"}
-          >
-            {getStatutLabel(vente.statutLivraison)}
-          </button>
+          <div>
+            <div className="status-badge typevente">
+              {vente.typeVente.charAt(0).toUpperCase()}
+            </div>
+            <button
+              className={`status-badge ${getStatutClass(vente.statutLivraison)}`}
+              onClick={() => onChangeStatut(vente._id, vente.statutLivraison)}
+              style={{
+                cursor:
+                  vente.statutLivraison === "annulé"
+                    ? "not-allowed"
+                    : "pointer",
+                border: "none",
+                flexShrink: 0,
+                marginLeft: 8,
+                opacity: vente.statutLivraison === "annulé" ? 0.6 : 1,
+              }}
+              disabled={vente.statutLivraison === "annulé"}
+            >
+              {getStatutLabel(vente.statutLivraison)}
+            </button>
+          </div>
         </div>
 
         {/* Ligne 2 : produit */}

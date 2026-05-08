@@ -281,10 +281,10 @@ body {
 }
 
 .status-badge {
-  padding: 5px 12px;
+  padding: 5px 8px;
   border-radius: 20px;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 10px;
+  font-weight: 400;
   display: inline-block;
 }
 .status-badge.en_attente {
@@ -298,6 +298,10 @@ body {
 .status-badge.livre {
   background: #d1fae5;
   color: #065f46;
+}
+
+.status-badge.typevente {
+  background: #7cd7f3;
 }
 .status-badge.annule {
   background: #fee2e2;

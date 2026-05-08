@@ -37,6 +37,7 @@ export const VenteTable = ({
             <th>Total</th>
             <th>Livreur</th>
             <th>Statut</th>
+            <th>Type Vente</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -211,7 +212,7 @@ export const VenteTable = ({
                   </td>
 
                   {/* Statut cliquable */}
-                  <td>
+                  <td className="flex gap-1">
                     <button
                       className={`status-badge ${getStatutClass(vente.statutLivraison)}`}
                       onClick={() =>
@@ -229,6 +230,14 @@ export const VenteTable = ({
                     >
                       {getStatutLabel(vente.statutLivraison)}
                     </button>
+                  </td>
+
+                  {/* Type vente */}
+
+                  <td>
+                    <div className="status-badge typevente">
+                      {vente.typeVente.toUpperCase()}
+                    </div>
                   </td>
 
                   {/* Actions */}
