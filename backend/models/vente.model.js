@@ -47,7 +47,7 @@ const venteSchema = new mongoose.Schema(
 
     // ── Client ───────────────────────────────────────────────────────────────
     nomClient: { type: String, required: true, trim: true },
-    telephoneClient: { type: String, required: true, trim: true },
+    telephoneClient: { type: String, trim: true },
     destinationClient: { type: String, trim: true, default: "Local" },
 
     // ── Totaux calculés automatiquement (pre-save) ───────────────────────────

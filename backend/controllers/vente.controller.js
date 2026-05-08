@@ -5,8 +5,6 @@ import Produit from "../models/produit.model.js";
 import Vente from "../models/vente.model.js";
 import { recalculerEtSauvegarderExpedition } from "./expedition.controller.js";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 /** Populate standard d'une vente */
 const POPULATE_VENTE = [
   { path: "balle", select: "nom numero" },
@@ -14,12 +12,6 @@ const POPULATE_VENTE = [
   { path: "livreur", select: "nom telephone" },
 ];
 
-/**
- * Mettre à jour l'expédition liée après modification d'une vente.
- * Puisque l'expédition référence directement les ventes (plus de copie),
- * il suffit de recalculer ses totaux.
- * Si la vente est annulée, on la retire du tableau de ventes de l'expédition.
- */
 async function syncExpedition(vente) {
   if (!vente.expedition) return;
 
@@ -287,12 +279,10 @@ export const ajouterProduitVente = async (req, res, next) => {
           .status(404)
           .json({ success: false, message: "Produit non trouvé" });
       if (produitDoc.statut !== "disponible")
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Ce produit n'est plus disponible",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Ce produit n'est plus disponible",
+        });
       produitDoc.statut = "vendu";
       await produitDoc.save();
     }
@@ -340,12 +330,10 @@ export const modifierProduitVente = async (req, res, next) => {
 
     const produitEntry = vente.produits.id(produitEntryId);
     if (!produitEntry) {
-      return res
-        .status(404)
-        .json({
-          success: false,
-          message: "Produit non trouvé dans cette vente",
-        });
+      return res.status(404).json({
+        success: false,
+        message: "Produit non trouvé dans cette vente",
+      });
     }
 
     const ancienTotal = vente.prixVente || 0;
@@ -412,12 +400,10 @@ export const supprimerProduitVente = async (req, res, next) => {
       (p) => p._id.toString() === produitEntryId,
     );
     if (entryIndex === -1) {
-      return res
-        .status(404)
-        .json({
-          success: false,
-          message: "Produit non trouvé dans cette vente",
-        });
+      return res.status(404).json({
+        success: false,
+        message: "Produit non trouvé dans cette vente",
+      });
     }
 
     const entry = vente.produits[entryIndex];

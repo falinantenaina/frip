@@ -791,7 +791,7 @@ const VenteForm = () => {
                 />
               </div>
               <div style={styles.formGroup}>
-                <label style={styles.label}>Téléphone *</label>
+                <label style={styles.label}>Téléphone</label>
                 <input
                   type="tel"
                   name="telephoneClient"
@@ -799,7 +799,6 @@ const VenteForm = () => {
                   placeholder="034 XX XXX XX"
                   value={infoForm.telephoneClient}
                   onChange={handleInfoChange}
-                  required
                 />
               </div>
               <div style={{ marginBottom: 0 }}>
