@@ -334,7 +334,10 @@ export const getRapportParCategorie = async (req, res, next) => {
     const { dateDebut, dateFin } = req.query;
     const dateRange = parseDateRange(dateDebut, dateFin);
 
-    const venteMatch = { statutLivraison: { $ne: "annulé" } };
+    const venteMatch = {
+      statutLivraison: { $ne: "annulé" },
+      typeVente: "libre",
+    };
     if (dateRange) venteMatch.dateVente = dateRange;
 
     const CATEGORIES = ["chaussures", "robes", "autres"];
