@@ -32,6 +32,8 @@ const Ventes = () => {
   const [filterDateSpecifique, setFilterDateSpecifique] = useState("");
   const [expandedVentes, setExpandedVentes] = useState(new Set());
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
+  const [filterDateDebut, setFilterDateDebut] = useState("");
+  const [filterDateFin, setFilterDateFin] = useState("");
 
   useEffect(() => {
     fetchVentes();
@@ -119,6 +121,11 @@ const Ventes = () => {
       const fin = endOfDay(parseISO(filterDateSpecifique));
       return dv >= debut && dv <= fin;
     }
+    if (filterPeriode === "plage" && filterDateDebut && filterDateFin) {
+      const debut = startOfDay(parseISO(filterDateDebut));
+      const fin = endOfDay(parseISO(filterDateFin));
+      return dv >= debut && dv <= fin;
+    }
     return true;
   });
 
@@ -132,6 +139,8 @@ const Ventes = () => {
       onClick={() => {
         setFilterPeriode(value);
         setFilterDateSpecifique("");
+        setFilterDateDebut("");
+        setFilterDateFin("");
       }}
       style={{
         padding: isMobile ? "6px 10px" : "7px 14px",
@@ -220,6 +229,50 @@ const Ventes = () => {
           <PeriodeBtn value="jour" label="Aujourd'hui" />
           <PeriodeBtn value="semaine" label="Semaine" />
           <PeriodeBtn value="mois" label="Mois" />
+          <PeriodeBtn value="plage" label="Plage" />
+
+          {filterPeriode === "plage" && (
+            <div
+              style={{
+                display: "flex",
+                gap: 6,
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
+              <input
+                type="date"
+                className="form-input"
+                style={{
+                  padding: "6px 10px",
+                  fontSize: 13,
+                  width: isMobile ? "100%" : 145,
+                  border: "2px solid var(--primary-color)",
+                  borderRadius: 6,
+                }}
+                value={filterDateDebut}
+                onChange={(e) => setFilterDateDebut(e.target.value)}
+              />
+              <span
+                style={{ color: "var(--secondary-color)", fontWeight: 600 }}
+              >
+                →
+              </span>
+              <input
+                type="date"
+                className="form-input"
+                style={{
+                  padding: "6px 10px",
+                  fontSize: 13,
+                  width: isMobile ? "100%" : 145,
+                  border: "2px solid var(--primary-color)",
+                  borderRadius: 6,
+                }}
+                value={filterDateFin}
+                onChange={(e) => setFilterDateFin(e.target.value)}
+              />
+            </div>
+          )}
           <input
             type="date"
             className="form-input"
@@ -237,6 +290,8 @@ const Ventes = () => {
             onChange={(e) => {
               setFilterDateSpecifique(e.target.value);
               setFilterPeriode(e.target.value ? "date" : "tous");
+              setFilterDateDebut("");
+              setFilterDateFin("");
             }}
           />
         </div>
